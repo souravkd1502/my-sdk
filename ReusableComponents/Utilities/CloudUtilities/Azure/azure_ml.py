@@ -18,9 +18,6 @@ Key Features:
 4. **Online Endpoint and Deployment**:
     - Simplifies the process of creating or updating online endpoints (`create_or_update_managed_endpoint`) and deploying models to them (`create_online_deployment`).
 
-5. **Azure Blob Storage Interaction**:
-    - Utility to upload data to Azure Blob Storage containers (`upload_blob_data`), facilitating data storage and retrieval in MLOps workflows.
-
 Logging:
 ---------
 All operations are logged for traceability and easier debugging, with different levels of logs (info, warning, error). In case of failures, appropriate exceptions are raised with detailed messages to ensure robustness.
@@ -50,7 +47,6 @@ Modules and Libraries:
 -----------------------
 - azure.ai.ml: Core Azure ML SDK for managing ML models, deployments, and workspaces.
 - azure.identity: Used for authentication with Azure services via DefaultAzureCredential.
-- azure.storage.blob: Provides Blob Storage interactions for data upload.
 - pandas: Handles dataset conversions into DataFrame for easier data manipulation.
 
 Requirements:
@@ -58,7 +54,6 @@ Requirements:
 - azure-ai-ml==1.23.0
 - azure-core==1.18.0
 - azure-identity==1.6.0
-- azure-storage-blob==12.8.1
 - azureml-core==1.59.0
 - pandas==2.2.3
 
@@ -96,13 +91,14 @@ from azure.ai.ml.entities import (
     ManagedOnlineDeployment,
 )
 
-# Set up logging 
+# Set up logging
 _logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s - line: %(lineno)d",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
 
 class AzureMLManager:
     """
@@ -149,7 +145,7 @@ class AzureMLManager:
         try:
             # Obtain Azure credentials using DefaultAzureCredential
             credential = DefaultAzureCredential()
-            
+
             # Initialize the MLClient with the provided subscription, resource group, and workspace
             self.ml_client = MLClient(
                 credential=credential,
@@ -157,14 +153,14 @@ class AzureMLManager:
                 resource_group_name=self.resource_group,
                 workspace_name=self.workspace_name,
             )
-            
+
             # Initialize the Workspace object for accessing Azure ML resources
             self.workspace = Workspace(
                 subscription_id=self.subscription_id,
                 resource_group=self.resource_group,
                 workspace_name=self.workspace_name,
             )
-            
+
             _logger.info("Azure ML clients initialized successfully.")
         except Exception as e:
             _logger.error(f"Failed to initialize Azure ML clients: {e}")
@@ -186,14 +182,14 @@ class AzureMLManager:
         try:
             # Retrieve the dataset by name from the workspace
             dataset = Dataset.get_by_name(self.workspace, name=data_asset_name)
-            
+
             # Convert the dataset to a pandas DataFrame
             df = dataset.to_pandas_dataframe()
-            
+
             # Log a warning if the DataFrame is empty
             if df.empty:
                 _logger.warning(f"The dataset '{data_asset_name}' is empty.")
-            
+
             return df
 
         except Exception as e:
@@ -225,13 +221,15 @@ class AzureMLManager:
 
             # Return the maximum version number among the listed models
             return max(int(m.version) for m in model_versions)
-        
+
         except Exception as e:
             # Log the error encountered during model version retrieval
             _logger.error(f"Error retrieving model versions: {e}")
             raise
 
-    def get_model_by_version(self, registered_model_name: str, model_version: int) -> Model:
+    def get_model_by_version(
+        self, registered_model_name: str, model_version: int
+    ) -> Model:
         """
         Retrieve a specific version of a registered model.
 
@@ -247,7 +245,9 @@ class AzureMLManager:
         """
         try:
             # Retrieve the model by name and version from the workspace
-            model = self.ml_client.models.get(name=registered_model_name, version=model_version)
+            model = self.ml_client.models.get(
+                name=registered_model_name, version=model_version
+            )
             return model
 
         except Exception as e:
@@ -256,7 +256,11 @@ class AzureMLManager:
             raise
 
     def create_or_update_managed_endpoint(
-        self, online_endpoint_name: str, description: str = "Online endpoint", auth_mode: str = "key", tags: dict = None
+        self,
+        online_endpoint_name: str,
+        description: str = "Online endpoint",
+        auth_mode: str = "key",
+        tags: dict = None,
     ) -> ManagedOnlineEndpoint:
         """
         Create or update a managed online endpoint.
@@ -275,10 +279,15 @@ class AzureMLManager:
         """
         tags = tags or {"default": "AzureML"}
         endpoint = ManagedOnlineEndpoint(
-            name=online_endpoint_name, description=description, auth_mode=auth_mode, tags=tags
+            name=online_endpoint_name,
+            description=description,
+            auth_mode=auth_mode,
+            tags=tags,
         )
         try:
-            return self.ml_client.online_endpoints.begin_create_or_update(endpoint).result()
+            return self.ml_client.online_endpoints.begin_create_or_update(
+                endpoint
+            ).result()
         except Exception as e:
             _logger.error(f"Error creating or updating endpoint: {e}")
             raise
@@ -318,7 +327,9 @@ class AzureMLManager:
             Exception: If an error occurs during the creation process.
         """
         try:
-            model = self.get_model_by_version(registered_model_name, latest_model_version)
+            model = self.get_model_by_version(
+                registered_model_name, latest_model_version
+            )
             deployment = ManagedOnlineDeployment(
                 name=deployment_name,
                 endpoint_name=online_endpoint_name,
@@ -331,7 +342,9 @@ class AzureMLManager:
                 instance_type=instance_type,
                 instance_count=instance_count,
             )
-            return self.ml_client.online_deployments.begin_create_or_update(deployment).result()
+            return self.ml_client.online_deployments.begin_create_or_update(
+                deployment
+            ).result()
         except Exception as e:
             _logger.error(f"Error creating deployment: {e}")
             raise

@@ -33,6 +33,16 @@ Requirements:
 - azure-identity==1.6.0
 - azure-storage-blob==12.8.1
 
+TODO:
+-----
+- Add async support for Azure Blob Storage operations.
+- Add support for other Azure Storage services (e.g., Azure File Storage, Azure Table Storage).
+- Add support for more advanced operations (e.g., copying blobs, setting metadata).
+- Add support for batch operations (e.g., uploading multiple files at once).
+
+FIXME:
+------
+
 Author:
 -------------
 Sourav Das
