@@ -229,7 +229,7 @@ class AzureBlobStorage:
         Args:
             container_name (str): The name of the container to upload the file to.
             file_name (str): The name of the file to be created or overwritten in the blob.
-            data (str): The data/content of the file to be uploaded.
+            data (bytes): The data/content of the file to be uploaded.
             overwrite (bool): A flag indicating whether to overwrite an existing file with the same name.
             blob_service_client (BlobServiceClient): An instance of `BlobServiceClient` for interacting with Azure Blob Storage.
 
@@ -292,7 +292,6 @@ class AzureBlobStorage:
         the provided connection string, container name, and file name.
 
         Args:
-            connection_string (str): The connection string to connect to Azure Blob Storage.
             container_name (str): The name of the container to download the file from.
             file_name (str): The name of the file to be downloaded from the blob.
             blob_service_client (BlobServiceClient): An instance of `BlobServiceClient` for interacting with Azure Blob Storage.
@@ -361,7 +360,7 @@ class AzureBlobStorage:
         Args:
             container_name (str): The name of the container to list the blobs from.
             BlobServiceClient (BlobServiceClient): An instance of `BlobServiceClient` for interacting with Azure Blob Storage.
-            
+            blob_service_client (BlobServiceClient): An instance of `BlobServiceClient` for interacting with Azure Blob Storage.
 
         Returns:
             List[str]: A list of blob names in the specified container.

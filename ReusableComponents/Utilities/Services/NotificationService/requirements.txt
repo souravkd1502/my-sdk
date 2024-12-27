@@ -1,0 +1,2 @@
+sendgrid==6.11.0
+tenacity==9.0.0
