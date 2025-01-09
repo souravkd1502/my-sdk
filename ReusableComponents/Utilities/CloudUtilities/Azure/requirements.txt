@@ -8,3 +8,4 @@ azure_cosmos==4.9.0
 azureml-core==1.59.0
 pandas==2.2.3
 azure-ai-ml==1.23.0
+python-dotenv==1.0.1
