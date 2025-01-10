@@ -408,7 +408,7 @@ class RedisManager:
         return self.connection.scan_iter(match=pattern)
 
     # Key-Value Operations
-    def get(self, key):
+    def get(self, key: str) -> Optional[Any]:
         """
         Retrieve a value from the Redis database.
 
@@ -419,7 +419,7 @@ class RedisManager:
 
         Returns:
         --------
-        str
+        Optional[Any]
             The value associated with the provided key.
 
         Raises:
