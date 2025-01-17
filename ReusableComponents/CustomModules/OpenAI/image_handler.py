@@ -72,13 +72,16 @@ sys.path.append("../")
 # Importing necessary libraries and modules
 import base64
 import logging
+from openai import OpenAI
 
-from typing import List, Dict, Any, Union
+from typing import List, Union, Literal
 
 # Set up logging
 _logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s - line: %(lineno)d",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 
@@ -132,18 +135,8 @@ class ImageHandler:
         if not self.api_key or not self.api_key.startswith("sk"):
             _logger.error("Invalid API key provided.")
             raise ValueError("Invalid API key. Please provide a valid OpenAI API key.")
-
-        # Attempt to import the OpenAI library
-        try:
-            import openai
-
-            self.client = openai
-            self.client.api_key = self.api_key
-        except ImportError as e:
-            _logger.exception("Failed to import OpenAI library.")
-            raise ImportError(
-                f"Unable to import OpenAI library: {str(e)}. Install it with `pip install openai`."
-            )
+        
+        self.client = OpenAI(api_key=self.api_key)
 
     def _encode_image(self, image_path: str) -> str:
         """
@@ -293,3 +286,56 @@ class ImageHandler:
         except Exception as e:
             _logger.exception("Failed to generate images.")
             raise RuntimeError(f"Failed to generate images: {str(e)}")
+        
+    def image_variation(
+        self,
+        image_path: str = None,
+        image_bytes: bytearray = None,
+        model: str = "dall-e-2",
+        size: Literal['256x256', '512x512', '1024x1024'] = "1024x1024",
+        n: int=1,
+        response_format: Literal["url", "b64_json"] = "url",
+    ) -> List[str]:
+        """
+        Generate variations of an image.
+
+        Args:
+            image_path (str): The path to the image file.
+            image_bytes (bytearray): The image data as a bytearray.
+            model (str): The model to use for image variation. Default is "dall-e-2".
+            size (str): The size of the generated images. Default is "1024x1024".
+            n (int): The number of variations to generate. Default is 1.
+
+        Returns:
+            List[str]: A list of URLs to the generated variations.
+
+        Raises:
+            ValueError: If the image path or bytes are invalid.
+            Exception: If the API call fails.
+        """
+        if not image_path and not image_bytes:
+            _logger.error("Image path or bytes are required.")
+            raise ValueError("Image path or bytes are required.")
+        if image_path and image_bytes:
+            _logger.error("Only one of image path or bytes should be provided.")
+            raise ValueError("Only one of image path or bytes should be provided.")
+
+        try:
+            if image_path:
+                image_data = open(image_path, "rb").read()
+            else:
+                image_data = image_bytes
+
+            response = self.client.images.create_variation(
+                model=model,
+                image=image_data,
+                size=size,
+                n=n,
+                response_format=response_format,
+            )
+
+            _logger.info("Image variation completed successfully.")
+            return [image["url"] for image in response["data"]]
+        except Exception as e:
+            _logger.exception("Failed to generate image variations.")
+            raise RuntimeError(f"Failed to generate image variations: {str(e)}")
