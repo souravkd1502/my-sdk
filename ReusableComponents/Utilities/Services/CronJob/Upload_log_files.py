@@ -17,7 +17,7 @@ Requirements:
 - boto3==1.36.2
 - azure-core==1.32.0
 - azure-storage-blob==12.24.0
-- flask==2.0.1
+- Flask==3.1.0
 - Flask-APScheduler==1.13.1
 """
 
