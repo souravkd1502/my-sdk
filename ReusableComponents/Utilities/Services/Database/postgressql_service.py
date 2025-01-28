@@ -67,7 +67,7 @@ logging.basicConfig(
 load_dotenv(override=True)
 
 # Constants
-
+JSON =".json"
 
 class PostgresSQLService:
     """
@@ -191,7 +191,7 @@ class PostgresSQLService:
 
         try:
             with open(config_file, "r") as f:
-                if file_ext == ".json":
+                if file_ext == JSON:
                     config = json.load(f)
                 elif file_ext in (".yml", ".yaml"):
                     config = yaml.safe_load(f)
@@ -682,7 +682,7 @@ class PostgresSQLService:
 
             try:
                 # Export to JSON
-                if file_path.endswith(".json"):
+                if file_path.endswith(JSON):
 
                     def custom_serializer(obj):
                         # Handle date and datetime
