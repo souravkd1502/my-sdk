@@ -858,20 +858,3 @@ class PostgresSQLService:
         if not python_type:
             return False  # Unknown type in schema
         return isinstance(value, python_type)
-
-
-if __name__ == "__main__":
-    # Example usage
-    config = {
-        "host": "localhost",
-        "port": 5432,
-        "user": "postgres",
-        "password": "admin",
-        "database": "postgres",
-    }
-
-    db = PostgresSQLService(config)
-    db._connect()
-
-    schema = db.get_schema("employees")
-    print(schema)
