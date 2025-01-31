@@ -53,17 +53,26 @@ sys.path.append("../")
 
 # Importing necessary libraries and modules
 import io
+import csv
 import time
 import json
+import redis
 import psutil
-import logging
 import base64
+import logging
+import pymongo
+import psycopg2
 import pandas as pd
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from flask import Flask, render_template_string, request, jsonify
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 from typing import Any, Dict, List
+
+import matplotlib
+
+matplotlib.use("Agg")
 
 # Set up logging
 _logger = logging.getLogger(__name__)
@@ -110,18 +119,134 @@ class MetricsCollector:
             self._metrics_data[endpoint] = {"count": 0, "cpu": [], "memory": [], "time": []}
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        store_metrics: bool = True,
+        storage_type: str = "json",
+        config: dict = None,
+    ):
         """
         Initialize the MetricsCollector.
 
         This class stores metrics of each API call in a dictionary. The keys are the
         endpoint paths, and the values are dictionaries containing the count of calls,
         CPU usage, memory usage, and execution time.
+
+        This class also provides methods to retrieve, reset, and save the collected metrics.
+
+        Parameters
+        ----------
+        storage_type : str, optional
+            The type of storage to use for saving the metrics. Defaults to "json".
+        storage_config : dict, optional
+            The configuration for the storage type. Defaults to None.
+
+        Storage Types:
+        --------------
+        - json: Save metrics to a JSON file.
+        - csv: Save metrics to a CSV file.
+        - postgres: Save metrics to a PostgreSQL database.
+        - mongodb: Save metrics to a MongoDB database.
+        - redis: Save metrics to a Redis database.
+        - prometheus: Push metrics to a Prometheus Pushgateway.
+
+        Storage Config:
+        --------------
+        - json: No configuration required.
+        - csv: No configuration required.
+        - postgres: Requires a dictionary with the following keys
+            - db_name: The name of the PostgreSQL database.
+            - user: The username for the PostgreSQL database.
+            - password: The password for the PostgreSQL database.
+            - host: The host for the PostgreSQL database.
+            - port: The port for the PostgreSQL database.
+        - mongodb: Requires a dictionary with the following keys
+            - uri: The URI for the MongoDB database.
+            - db_name: The name of the MongoDB database.
+            - collection_name: The name of the MongoDB collection.
+        - redis: Requires a dictionary with the following keys
+            - host: The host for the Redis database.
+            - port: The port for the Redis database.
+            - db: The database number for the Redis database.
+        - prometheus: Requires a dictionary with the following keys
+            - gateway: The address of the Prometheus Pushgateway.
+            - job: The name of the job to push metrics to.
+            - instance: The name of the instance to push metrics to.
+            - port: The port to push metrics to.
+
+        Returns
+        -------
+        None
         """
         self.metrics_data = {}  # Store metrics for each endpoint
         self.process = (
             psutil.Process()
         )  # Store the process object to measure CPU and memory usage
+
+        self.store_metrics = store_metrics
+        if store_metrics:
+            if storage_type not in [
+                "json",
+                "csv",
+                "postgres",
+                "mongodb",
+                "redis",
+                "prometheus",
+            ]:
+                raise ValueError(
+                    "Invalid storage type. Choose from 'json', 'csv', 'postgres', 'mongodb', 'redis', 'prometheus'."
+                )
+
+            if config is None:
+                raise ValueError("Storage configuration is required.")
+            
+        self.storage_type = storage_type.lower()
+        self.config = config or {}
+
+        # Initialize Prometheus registry if used
+        if self.storage_type == "prometheus":
+            self.registry = CollectorRegistry()
+            self.gauge_metrics = {
+                "request_count": Gauge(
+                    "request_count", "Number of requests", registry=self.registry
+                ),
+                "avg_latency": Gauge(
+                    "avg_latency", "Average request latency", registry=self.registry
+                ),
+                "error_count": Gauge(
+                    "error_count", "Number of failed requests", registry=self.registry
+                ),
+            }
+
+        # Initialize Redis if used
+        if self.storage_type == "redis":
+            self.redis_client = redis.Redis(
+                host=self.config.get("host", "localhost"),
+                port=self.config.get("port", 6379),
+                db=self.config.get("db", 0),
+            )
+
+        # Initialize MongoDB if used
+        if self.storage_type == "mongodb":
+            self.mongo_client = pymongo.MongoClient(
+                self.config.get("uri", "mongodb://localhost:27017/")
+            )
+            self.mongo_db = self.mongo_client[self.config.get("db_name", "metrics_db")]
+            self.mongo_collection = self.mongo_db[
+                self.config.get("collection_name", "metrics")
+            ]
+
+        # Initialize PostgreSQL if used
+        if self.storage_type == "postgres":
+            self.pg_conn = psycopg2.connect(
+                dbname=self.config.get("db_name", "metrics_db"),
+                user=self.config.get("user", "postgres"),
+                password=self.config.get("password", "password"),
+                host=self.config.get("host", "localhost"),
+                port=self.config.get("port", 5432),
+            )
+            self.pg_cursor = self.pg_conn.cursor()
+            self._initialize_postgres_table()
 
     def start_timer(self) -> None:
         """
@@ -158,6 +283,8 @@ class MetricsCollector:
         app.before_request(self.start_timer)
         _logger.info("MetricsCollector.init_app: before_request handler set")
         app.after_request(self.collect_metrics)
+        if self.store_metrics:
+            app.after_request(self.save_metrics)
         _logger.info("MetricsCollector.init_app: after_request handler set")
 
     def collect_metrics(self, response):
@@ -259,6 +386,18 @@ class MetricsCollector:
             self.metrics_data[endpoint]["time"]
         )
 
+        # Calculate percentiles for request time (P50, P90, P99)
+        times = sorted(self.metrics_data[endpoint]["time"])
+        self.metrics_data[endpoint]["p50"] = (
+            times[int(len(times) * 0.50)] if times else 0
+        )
+        self.metrics_data[endpoint]["p90"] = (
+            times[int(len(times) * 0.90)] if times else 0
+        )
+        self.metrics_data[endpoint]["p99"] = (
+            times[int(len(times) * 0.99)] if times else 0
+        )
+
         _logger.info(
             f"Metrics collected for {method} {endpoint}: {self.metrics_data[endpoint]}"
         )
@@ -331,7 +470,7 @@ class MetricsCollector:
             _logger.info(f"Metrics saved to {filename}")
 
     def visualize_metrics(self):
-        """Renders the dashboard."""
+        """Renders the dashboard with performance metrics and error statistics."""
         data = self.get_metrics(metric_endpoint=["/view", "/metrics"])
 
         tables = {}
@@ -341,31 +480,57 @@ class MetricsCollector:
             stats_df = pd.DataFrame(
                 {
                     "Metric": ["Average", "Max", "Min"],
-                    "CPU Usage": [
-                        metrics["avg_cpu"],
-                        metrics["max_cpu"],
-                        metrics["min_cpu"],
+                    "CPU Usage (%)": [
+                        metrics.get("avg_cpu", 0),
+                        metrics.get("max_cpu", 0),
+                        metrics.get("min_cpu", 0),
                     ],
-                    "Memory Usage": [
-                        metrics["avg_memory"],
-                        metrics["max_memory"],
-                        metrics["min_memory"],
+                    "Memory Usage (MB)": [
+                        metrics.get("avg_memory", 0),
+                        metrics.get("max_memory", 0),
+                        metrics.get("min_memory", 0),
                     ],
-                    "Response Time": [
-                        metrics["avg_time"],
-                        metrics["max_time"],
-                        metrics["min_time"],
+                    "Response Time (MS)": [
+                        metrics.get("avg_time", 0),
+                        metrics.get("max_time", 0),
+                        metrics.get("min_time", 0),
                     ],
                 }
             )
-            tables[endpoint] = stats_df.to_html(
-                classes="table table-striped", index=False
+
+            summary_df = pd.DataFrame(
+                {
+                    "Total Requests": [metrics.get("count", 0)],
+                    "Errors": [metrics.get("error_count", 0)],
+                    "p50 (MS)": [metrics.get("p50", 0)],
+                    "p90 (MS)": [metrics.get("p90", 0)],
+                    "p99 (MS)": [metrics.get("p99", 0)],
+                }
             )
+
+            tables[endpoint] = {
+                "stats": stats_df.to_html(classes="table table-striped", index=False),
+                "summary": summary_df.to_html(
+                    classes="table table-striped", index=False
+                ),
+            }
             plots[endpoint] = self.generate_plot(metrics)
 
         HTML = """
         <!DOCTYPE html>
         <html lang="en">
+        <style>
+            .table th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+                text-align: center;
+            }
+            .table td {
+                text-align: center;
+                vertical-align: middle;
+            }
+        </style>
+
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -376,12 +541,20 @@ class MetricsCollector:
             <div class="container mt-4">
                 <h1 class="text-center">Metrics Dashboard</h1>
                 
-                {% for endpoint, table in tables.items() %}
+                {% for endpoint, tables in tables.items() %}
                 <div class="mt-5">
                     <h3>Endpoint: {{ endpoint }}</h3>
+                    
                     <div class="table-responsive">
-                        {{ table | safe }}
+                        <h5>Performance Metrics</h5>
+                        {{ tables.stats | safe }}
                     </div>
+
+                    <div class="table-responsive mt-3">
+                        <h5>Summary Statistics</h5>
+                        {{ tables.summary | safe }}
+                    </div>
+
                     <div class="text-center mt-3">
                         <img src="data:image/png;base64,{{ plots[endpoint] }}" alt="Plot for {{ endpoint }}" class="img-fluid">
                     </div>
@@ -392,7 +565,6 @@ class MetricsCollector:
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         </body>
         </html>
-
         """
 
         return render_template_string(HTML, tables=tables, plots=plots)
@@ -479,5 +651,152 @@ class MetricsCollector:
 
         return plot_url
 
+    def _initialize_postgres_table(self):
+        """Create the metrics table if it does not exist."""
+        self.pg_cursor.execute(
+            """
+        CREATE TABLE IF NOT EXISTS metrics (
+            id SERIAL PRIMARY KEY,
+            endpoint TEXT,
+            count INT,
+            avg_latency FLOAT,
+            error_count INT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        )
+        self.pg_conn.commit()
+
+    def save_metrics(self, endpoint: str):
+        """
+        Save metrics to the configured storage.
+
+        :param endpoint: API endpoint for which metrics are recorded.
+        :param metrics_data: Dictionary containing metrics data.
+        """
+        if self.storage_type == "json":
+            self._save_to_json(self.metrics_data)
+        elif self.storage_type == "csv":
+            self._save_to_csv(endpoint, self.metrics_data)
+        elif self.storage_type == "postgres":
+            self._save_to_postgres(endpoint, self.metrics_data)
+        elif self.storage_type == "mongodb":
+            self._save_to_mongodb(endpoint, self.metrics_data)
+        elif self.storage_type == "redis":
+            self._save_to_redis(endpoint, self.metrics_data)
+        elif self.storage_type == "prometheus":
+            self._push_to_prometheus(self.metrics_data)
+
+    def _save_to_json(self, metrics_data: dict):
+        """Save metrics to a JSON file."""
+        with open("metrics.json", "w") as f:
+            json.dump(metrics_data, f, indent=4)
+
+    def _save_to_csv(self, endpoint: str, metrics_data: dict):
+        """Save metrics to a CSV file."""
+        with open("metrics.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    endpoint,
+                    metrics_data["count"],
+                    metrics_data["avg_time"],
+                    metrics_data["error_count"],
+                    time.strftime("%Y-%m-%d %H:%M:%S"),
+                ]
+            )
+
+    def _save_to_postgres(self, endpoint: str, metrics_data: dict):
+        """Save metrics to PostgreSQL."""
+        self.pg_cursor.execute(
+            """
+        INSERT INTO metrics (endpoint, count, avg_latency, error_count)
+        VALUES (%s, %s, %s, %s);
+        """,
+            (
+                endpoint,
+                metrics_data["count"],
+                metrics_data["avg_time"],
+                metrics_data["error_count"],
+            ),
+        )
+        self.pg_conn.commit()
+
+    def _save_to_mongodb(self, endpoint: str, metrics_data: dict):
+        """Save metrics to MongoDB."""
+        self.mongo_collection.insert_one({"endpoint": endpoint, **metrics_data})
+
+    def _save_to_redis(self, endpoint: str, metrics_data: dict):
+        """Save metrics to Redis."""
+        self.redis_client.set(endpoint, json.dumps(metrics_data))
+
+    def _push_to_prometheus(self, metrics_data: dict):
+        """Push metrics to Prometheus Pushgateway."""
+        self.gauge_metrics["request_count"].set(metrics_data["count"])
+        self.gauge_metrics["avg_latency"].set(metrics_data["avg_time"])
+        self.gauge_metrics["error_count"].set(metrics_data["error_count"])
+        push_to_gateway(
+            self.config.get("gateway", "localhost:9091"),
+            job="metrics_job",
+            registry=self.registry,
+        )
 
 
+# Initialize Flask and MetricsCollector
+app = Flask(__name__)
+Metrics = MetricsCollector(
+    store_metrics=False,
+    storage_type="prometheus",
+    config={
+        "gateway": "localhost:9091",
+        "job": "metrics_job",
+        "instance": "metrics_instance",
+        "port": 9090,
+    },
+)
+Metrics.init_app(app)
+
+
+@app.route("/data")
+def data():
+    """Test API Endpoint"""
+    return jsonify({"message": "Metrics collected!"})
+
+
+@app.route("/data2")
+def data2():
+    """Test API Endpoint"""
+    import random
+
+    int_value = random.randint(1, 100)
+    return jsonify({"message": "Metrics collected!", "random_int": int_value})
+
+
+@app.route("/metrics")
+def get_metrics():
+    """Endpoint to view collected metrics"""
+    return jsonify(Metrics.get_metrics(metric_endpoint=["/view", "/metrics"]))
+
+
+@app.route("/reset")
+def reset_metrics():
+    """Endpoint to reset collected metrics"""
+    Metrics.reset_metrics()
+    return jsonify({"message": "Metrics reset!"})
+
+
+@app.route("/save")
+def save_metrics():
+    """Endpoint to save collected metrics to a file"""
+    Metrics.save_metrics_to_file()
+    return jsonify({"message": "Metrics saved!"})
+
+
+@app.route("/view")
+def index():
+    """Renders the dashboard"""
+    return Metrics.visualize_metrics()
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=8080)

@@ -445,7 +445,7 @@ llm_flow = LLMFlow(
         "provider": "huggingface",
         "model_name": "Qwen/Qwen2.5-3B",
         "temperature": 0.5,
-        "max_tokens": 100,
+        "max_tokens": 1000,
     },
     auth_config={
         "provider": "huggingface",
@@ -454,7 +454,7 @@ llm_flow = LLMFlow(
 
 res = llm_flow.generate_text(
     system_prompt="Generate a text response.",
-    user_prompt="What is the capital of France?",
+    user_prompt="Write an essay about AI?",
 )
 
 
