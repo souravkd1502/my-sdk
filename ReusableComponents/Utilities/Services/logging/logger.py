@@ -301,7 +301,7 @@ class EnhancedLogger:
         self,
         platform: Literal["azure", "aws"],
         platform_config: Dict[str, str],
-        service: Optional[str] = None,
+        service: Optional[str] | Optional[List[str]] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         organization: Optional[str] = None,
@@ -335,7 +335,7 @@ class EnhancedLogger:
     def _fetch_logs_azure(
         self,
         platform_config: Dict[str, str],
-        service: Optional[str],
+        services: Optional[List[str]] | Optional[str],
         user_id: Optional[str],
         session_id: Optional[str],
         organization: Optional[str],
@@ -353,14 +353,20 @@ class EnhancedLogger:
             platform_config["container_name"]
         )
         logs = []
-        
+
+        if services and isinstance(services, str):
+            services = [services]
+
+        if not services or len(services) == 0 or services == "":
+            raise ValueError("Service name is required for log filtering.")
+
         if start_date:
-            blob_patterns = self._create_blob_key_filter(start_date, end_date, service)
-            print(f"Blob patterns: {blob_patterns}")
+            blob_patterns = self._create_blob_key_filter(start_date, end_date, services)
 
         for blob in container_client.list_blobs():
-            print(f"Blob name: {blob.name}")
-            if start_date and not any(pattern in blob.name for pattern in blob_patterns):
+            if start_date and not any(
+                pattern in blob.name for pattern in blob_patterns
+            ):
                 continue  # Skip blobs that don't match any of the expected date patterns
 
             blob_client = container_client.get_blob_client(blob.name)
@@ -373,7 +379,7 @@ class EnhancedLogger:
                 except json.JSONDecodeError:
                     continue  # Ignore corrupted log lines
         logs = self._apply_filters(
-            logs, service, user_id, session_id, level, organization
+            logs, services, user_id, session_id, level, organization
         )
 
         return logs[offset : offset + limit] if offset is not None and limit else logs
@@ -409,7 +415,7 @@ class EnhancedLogger:
     def _apply_filters(
         self,
         logs: List[Dict[str, str]],
-        service: Optional[str] = None,
+        service: Optional[str] | Optional[List[str]] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         level: Optional[str] = None,
@@ -420,26 +426,35 @@ class EnhancedLogger:
 
         Args:
             logs (List[Dict[str, str]]): List of log entries (each entry is a dictionary).
-            service (Optional[str]): Filter by service name.
-            user (Optional[str]): Filter by user.
-            session (Optional[str]): Filter by session.
+            service (Optional[str | list[str]]): Filter by service name, either a single string or a list of strings.
+            user_id (Optional[str]): Filter by user.
+            session_id (Optional[str]): Filter by session.
             level (Optional[str]): Filter by log level.
             organization (Optional[str]): Filter by organization.
 
         Returns:
             List[Dict[str, str]]: Filtered list of log entries.
         """
+        # Ensure 'service' is always a list (if it's a string, make it a list)
+        if isinstance(service, str):
+            service = [service]
+        
         return [
             log
             for log in logs
-            if (service is None or log.get("service") == service)
+            if (service is None or log.get("service") in service)
             and (user_id is None or log.get("user") == user_id)
             and (session_id is None or log.get("session") == session_id)
             and (level is None or log.get("level") == level)
             and (organization is None or log.get("organization") == organization)
         ]
 
-    def _create_blob_key_filter(self, start_date: Optional[str] = None, end_date: Optional[str] = None, service: Optional[str] = None) -> list[str]:
+    def _create_blob_key_filter(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        services: Optional[List[str]] = None,
+    ) -> list[str]:
         """
         Creates a list of blob key prefixes for Azure Blob Storage based on an optional date range and service.
         If the dates are provided in an incorrect format, it attempts to correct them to 'YYYY/MM/DD'.
@@ -451,21 +466,26 @@ class EnhancedLogger:
 
         Returns:
             list[str]: A list of blob key prefixes to filter the logs.
-
-        Example:
-            _create_blob_key_filter("2025-02-05", "2025-02-07", "MyService")
-            # Returns ["MyService/2025/02/05", "MyService/2025/02/06", "MyService/2025/02/07"]
         """
         final_date_format = "%Y/%m/%d"
-        
+
         def _normalize_date(date_str: str) -> datetime:
             """Attempts to normalize different date formats into a datetime object."""
-            for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y"):
+            for fmt in (
+                "%Y-%m-%d",
+                "%Y/%m/%d",
+                "%Y.%m.%d",
+                "%d-%m-%Y",
+                "%d/%m/%Y",
+                "%d.%m.%Y",
+            ):
                 try:
                     return datetime.strptime(date_str, fmt)
                 except ValueError:
                     continue
-            raise ValueError(f"Invalid date format: {date_str}. Expected formats: YYYY-MM-DD, DD-MM-YYYY, etc.")
+            raise ValueError(
+                f"Invalid date format: {date_str}. Expected formats: YYYY-MM-DD, DD-MM-YYYY, etc."
+            )
 
         # Normalize start_date
         if start_date:
@@ -476,7 +496,9 @@ class EnhancedLogger:
 
             # If end_date is not provided, default to today's date
             if not end_date:
-                end_date = datetime.today().strftime("%Y-%m-%d")  # Keep format consistent
+                end_date = datetime.today().strftime(
+                    "%Y-%m-%d"
+                )  # Keep format consistent
 
         # Normalize end_date
         if end_date:
@@ -494,13 +516,14 @@ class EnhancedLogger:
         current_date = start_date
 
         while current_date <= end_date:
-            date_str = current_date.strftime(final_date_format)
-            blob_keys.append(f"{service}/{date_str}" if service else f"*/{date_str}")  # Wildcard for all services
-            current_date += timedelta(days=1)
+            for service in services:
+                date_str = current_date.strftime(final_date_format)
+                blob_keys.append(
+                    f"{service}/{date_str}" if service else f"*/{date_str}"
+                )  # Wildcard for all services
+                current_date += timedelta(days=1)
 
         return blob_keys
-
-
 
     def _return_html(self, logs: List[Dict[str, str]]) -> str:
         """Return logs as an HTML table."""
