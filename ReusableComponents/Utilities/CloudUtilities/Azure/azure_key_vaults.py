@@ -381,7 +381,7 @@ class AzureKeyVault:
         """
         try:
             # List properties of all secrets in the vault
-            secret_properties = self.client.list_properties_of_secrets()
+            secret_properties = self.secret_client.list_properties_of_secrets()
             secret_names = [
                 secret_property.name for secret_property in secret_properties
             ]

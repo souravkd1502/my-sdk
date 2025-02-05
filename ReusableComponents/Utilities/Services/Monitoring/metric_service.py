@@ -121,7 +121,7 @@ class MetricsCollector:
 
     def __init__(
         self,
-        store_metrics: bool = True,
+        store_metrics: bool = False,
         storage_type: str = "json",
         config: dict = None,
     ):
@@ -744,16 +744,7 @@ class MetricsCollector:
 
 # Initialize Flask and MetricsCollector
 app = Flask(__name__)
-Metrics = MetricsCollector(
-    store_metrics=False,
-    storage_type="prometheus",
-    config={
-        "gateway": "localhost:9091",
-        "job": "metrics_job",
-        "instance": "metrics_instance",
-        "port": 9090,
-    },
-)
+Metrics = MetricsCollector()
 Metrics.init_app(app)
 
 
