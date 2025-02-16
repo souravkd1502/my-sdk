@@ -117,23 +117,8 @@ class MongoDBService:
         self.max_pool_size = max_pool_size
         self.wait_queue_timeout_ms = wait_queue_timeout_ms
 
-        # Validate required parameters for connection
-        if not self.uri and not (
-            self.cluster_url and self.user and self.password and self.cluster_name
-        ):
-            raise ValueError(
-                "Please provide the MongoDB URI or cluster URL, user, cluster_name and password."
-            )
-
-        if self.uri and (
-            self.cluster_url or self.user or self.password or self.cluster_name
-        ):
-            raise ValueError(
-                "Please provide either the MongoDB URI or cluster URL, user, cluster_name and password."
-            )
-
-        if not self.db_name and not self.collection_name:
-            raise ValueError("Please provide the database and collection names.")
+        # Validate the connection parameters
+        self._validate_connection_parameters()
 
         # Connect to MongoDB cluster
         self.connection = self._connect_to_mongodb()
@@ -141,12 +126,75 @@ class MongoDBService:
         # Get the database and collection
         self.db = self.connection.get_database(self.db_name)
         if self.db is None:
+            _logger.error(f"Database {self.db_name} not found.")
             raise ValueError(f"Database {self.db_name} not found.")
         self.collection = self.db.get_collection(self.collection_name)
         if self.collection is None:
+            _logger.info(f"Collection {self.collection_name} not found.")
             raise ValueError(f"Collection {self.collection_name} not found.")
 
     # Connection Management
+
+    def _validate_connection_parameters(self) -> None:
+        """
+        Validates the connection parameters.
+
+        Args:
+        -----
+            - None
+
+        Returns:
+        --------
+            - None
+
+        Raises:
+        -------
+            - ValueError: If no parameters are provided.
+            - ValueError: If both URI and cluster URL, user, cluster_name and password are provided.
+            - ValueError: If database or collection names are not provided.
+
+        Notes:
+        ------
+        - If uri is provided, it will be used to connect to the MongoDB cluster.
+        - If cluster_url, user, cluster_name and password are provided, they will be used to connect to the MongoDB cluster.
+        - If no parameters are provided, the connection will be established using the environment variables.
+
+        Example:
+        --------
+        >>> mongo_db_service = MongoDBService(uri="mongodb://localhost:27017", collection_name="my_collection", db_name="my_database")
+                                                # Connect to MongoDB cluster using URI
+        >>> mongo_db_service = MongoDBService(
+            cluster_url="localhost:27017",
+            user="XXXXX",
+            password="XXXXX",
+            cluster_name="my_cluster",
+            collection_name="my_collection",
+            db_name="my_database"
+        )
+                                                # Connect to MongoDB cluster using cluster URL, user, cluster_name and password
+        >>> mongo_db_service = MongoDBService() # Connect to MongoDB cluster using environment variables
+        """
+        if (
+            not self.uri
+            and not self.cluster_url
+            and not self.user
+            and not self.password
+            and not self.cluster_name
+        ):
+            raise ValueError("No connection parameters provided.")
+        elif (
+            self.uri
+            and self.cluster_url
+            and self.user
+            and self.password
+            and self.cluster_name
+        ):
+            raise ValueError(
+                "Both URI and cluster URL, user, cluster_name and password are provided. Please provide only one of them."
+            )
+        elif not self.db_name or not self.collection_name:
+            raise ValueError("Database or collection names are not provided.")
+
     def _connect_to_mongodb(self) -> MongoClient:
         """
         Connect to the MongoDB cluster.
@@ -214,7 +262,7 @@ class MongoDBService:
             return True
         except ValidationError:
             return False
-        
+
     # Database Operations
     def _list_databases(self) -> List[str]:
         """
@@ -245,7 +293,7 @@ class MongoDBService:
         except PyMongoError as e:
             print(f"Error listing databases: {e}")
             return []
-        
+
     def _list_collections(self) -> List[str]:
         """
         Lists all collections in the database.
@@ -261,7 +309,7 @@ class MongoDBService:
         Raises:
         -------
             - PyMongoError: If there is an error while listing the collections.
-        
+
         Example:
         --------
         ```python
@@ -275,7 +323,7 @@ class MongoDBService:
         except PyMongoError as e:
             print(f"Error listing collections: {e}")
             return []
-        
+
     def _create_collections(self, collection_name: str | List[str]) -> None:
         """
         Creates a collection in the database if it doesn't exist.
@@ -308,7 +356,7 @@ class MongoDBService:
             print(f"Collection {collection_name} created.")
         except PyMongoError as e:
             print(f"Error creating collection: {e}")
-        
+
     def _drop_collections(self, collection_name: str | List[str]) -> None:
         """
         Drops a collection from the database.
@@ -316,15 +364,15 @@ class MongoDBService:
         Args:
         -----
             - collection_name (str | List[str]): The name of the collection to drop.
-        
+
         Returns:
         --------
             - None
-        
+
         Raises:
         -------
             - PyMongoError: If there is an error while dropping the collection.
-            
+
         Example:
         --------
         ```python
@@ -342,7 +390,7 @@ class MongoDBService:
         except PyMongoError as e:
             print(f"Error dropping collection: {e}")
 
-    # Basic CRUD operations 
+    # Basic CRUD operations
     def insert_one(
         self,
         document: Dict[str, Any],
@@ -517,7 +565,6 @@ class MongoDBService:
             # Exclude soft-deleted documents if include_soft_deleted is True
             if include_soft_deleted:
                 query["deleted"] = {"$eq": True}
-                
 
             # Return a single document if 'single' is True
             if single:
@@ -688,7 +735,7 @@ class MongoDBService:
             # Log the error and return None if an exception occurs
             print(f"Error deleting documents: {e}")
             return None
-        
+
     def soft_delete_documents(self, query: Dict[str, Any], single: bool = False) -> int:
         """
         Perform a soft delete by setting a `deleted` flag in the matching documents.
@@ -701,11 +748,11 @@ class MongoDBService:
         Returns:
         --------
             int: The count of documents updated.
-        
+
         Raises:
         -------
             - PyMongoError: If there is an error during the soft delete operation.
-        
+
         Example:
         --------
         ```python
@@ -734,7 +781,7 @@ class MongoDBService:
         except PyMongoError as e:
             print(f"Error during soft delete: {e}")
             return 0
-        
+
     def aggregate_documents(
         self,
         pipeline: List[Dict[str, Any]],
@@ -772,7 +819,9 @@ class MongoDBService:
         """
         try:
             if explain:
-                return self.collection.aggregate(pipeline, allowDiskUse=allow_disk_use, explain=True)
+                return self.collection.aggregate(
+                    pipeline, allowDiskUse=allow_disk_use, explain=True
+                )
 
             results = self.collection.aggregate(pipeline, allowDiskUse=allow_disk_use)
             return list(results)
@@ -781,7 +830,9 @@ class MongoDBService:
             print(f"Error during aggregation: {e}")
             return None
 
-    def common_aggregations(self, operation: str, field: str, query: Optional[Dict[str, Any]] = None) -> Optional[List[Dict[str, Any]]]:
+    def common_aggregations(
+        self, operation: str, field: str, query: Optional[Dict[str, Any]] = None
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Provide helper methods for common aggregation operations.
 
@@ -813,7 +864,7 @@ class MongoDBService:
         """
         if query is None:
             query = {}
-            
+
         MATCH_STRING = "$match"
         GROUP_STRING = "$group"
 
@@ -854,11 +905,13 @@ class MongoDBService:
         except PyMongoError as e:
             print(f"Error during common aggregation: {e}")
             return None
-        
+
     # Bulk Operations
-    
+
     # Export-Import Operations
-    def export_to_json(self, file_path: str, query: Optional[Dict[str, Any]] = None) -> bool:
+    def export_to_json(
+        self, file_path: str, query: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """
         Export data from the collection to a JSON file.
 
@@ -917,7 +970,7 @@ class MongoDBService:
                 for doc in documents:
                     doc["_id"] = ObjectId(doc["_id"])
                 self.collection.insert_many(documents, ordered=False)
-                
+
             print(f"Data imported successfully from {file_path}")
             return True
         except (PyMongoError, IOError) as e:
