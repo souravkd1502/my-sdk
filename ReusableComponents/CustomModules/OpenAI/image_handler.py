@@ -339,3 +339,18 @@ class ImageHandler:
         except Exception as e:
             _logger.exception("Failed to generate image variations.")
             raise RuntimeError(f"Failed to generate image variations: {str(e)}")
+
+
+if __name__ == "__main__":
+    # Example usage of the ImageHandler class
+    handler = ImageHandler(model="gpt-4o", api_key="<api_key>")
+
+    # Perform QA on an image
+    response = handler.qa_from_images(
+        image_inputs="<path_to_image> | <url_to_image>",  # Provide the path to the image file or URL
+        question="<user_question>",  # Ask a question about the image
+        max_tokens=1000,
+        returned_as_dict=True,
+    )
+    from pprint import pprint
+    pprint(response)
