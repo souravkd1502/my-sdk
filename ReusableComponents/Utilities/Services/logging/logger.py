@@ -76,6 +76,16 @@ viewer.start_html_dashboard(
     port=5000,
 )
 
+# 6. Clean up old logs using LogCleanupManager
+--------------------------------------------------
+cleaner = LogCleanupManager(
+    db_path="logs/example_app.db",
+    log_dir="logs",
+    file_patterns=[".log", ".gz"],
+    retention_days=15
+)
+cleaner.run()
+
 
 ------------------------------------
 
@@ -129,10 +139,10 @@ import logging
 import threading
 from rich.table import Table
 from rich.console import Console
-from datetime import datetime, timezone
 from azure.storage.blob import BlobServiceClient
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, render_template_string
 
 from typing import Optional, Literal, Dict, List, Any, Union
@@ -175,32 +185,33 @@ class EnhancedLogger:
             backup_count: Number of rotated logs to keep.
         """
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        self.logger.setLevel(logging.DEBUG)
 
         self.log_file = log_file
         self.db_path = db_path
         self.service = service or "DefaultService"
-
         self.executor = ThreadPoolExecutor(max_workers=2)
-
-        # Console handler setup
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        self.logger.addHandler(console_handler)
-
-        # Optional file handler
-        if self.log_file:
-            self._setup_file_handler(formatter, max_bytes, backup_count)
-
-        # Optional DB initialization
-        if self.db_path:
-            self._init_db()
-
+        
         if not self.db_path and not self.log_file:
             raise ValueError(
                 "At least one of 'log_file' or 'db_path' must be specified for EnhancedLogger."
             )
+
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+        if not self.logger.handlers:
+            # Console handler setup
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
+
+            # Optional file handler
+            if self.log_file:
+                self._setup_file_handler(formatter, max_bytes, backup_count)
+
+        # Optional DB initialization
+        if self.db_path:
+            self._init_db()
 
     def _setup_file_handler(
         self,
@@ -281,7 +292,7 @@ class EnhancedLogger:
         Raises:
             ValueError: If an invalid log level is provided.
         """
-        valid_levels = {"debug", "info", "warning", "error", "critical", "exception"}
+        valid_levels = {"debug", "info", "warning", "error", "critical"}
         level = level.lower()
 
         if level not in valid_levels:
@@ -346,6 +357,29 @@ class EnhancedLogger:
         except Exception as e:
             # Avoid infinite loop if DB logging also fails
             self.logger.error(f"Failed to write log to DB: {e}")
+
+    def shutdown(self, wait: bool = True):
+        """
+        Shutdown the thread pool executor to free up resources.
+
+        Args:
+            wait: If True, waits for all threads to finish before returning.
+        """
+        if self.executor:
+            self.executor.shutdown(wait=wait)
+            self.executor = None
+
+    def __enter__(self):
+        """
+        Enter context for 'with' statement support.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Ensure the executor is shut down when exiting context.
+        """
+        self.shutdown()
 
 
 class LogExporter:
@@ -797,7 +831,7 @@ class CloudLogUploader:
             raise RuntimeError(f"SQLite error: {e}") from e
         finally:
             conn.close()
-
+    
         if not rows:
             print("No log entries found in database.")
             return
@@ -873,7 +907,7 @@ class LogDashboardViewer:
         source: str,
         source_type: str = "file",
         db_table: str = "logs",
-        page_size: int = 50
+        page_size: int = 50,
     ) -> None:
         """
         Initialize the log viewer.
@@ -889,7 +923,9 @@ class LogDashboardViewer:
         self.db_table = db_table
         self.page_size = page_size
 
-    def _filter_entry(self, entry: Dict[str, Any], filters: Dict[str, Optional[str]]) -> bool:
+    def _filter_entry(
+        self, entry: Dict[str, Any], filters: Dict[str, Optional[str]]
+    ) -> bool:
         """
         Check if a log entry matches the given filters.
 
@@ -905,12 +941,13 @@ class LogDashboardViewer:
                 if key == "message":
                     if value.lower() not in str(entry.get(key, "")).lower():
                         return False
-                else:
-                    if str(entry.get(key, "")).lower() != value.lower():
-                        return False
+                elif str(entry.get(key, "")).lower() != value.lower():
+                    return False
         return True
 
-    def _read_logs_from_file(self, page: int, filters: Dict[str, Optional[str]]) -> List[Dict[str, Any]]:
+    def _read_logs_from_file(
+        self, page: int, filters: Dict[str, Optional[str]]
+    ) -> List[Dict[str, Any]]:
         if not os.path.exists(self.source):
             raise FileNotFoundError(f"Log file '{self.source}' not found.")
 
@@ -937,7 +974,9 @@ class LogDashboardViewer:
 
         return result
 
-    def _read_logs_from_db(self, page: int, filters: Dict[str, Optional[str]]) -> List[Dict[str, Any]]:
+    def _read_logs_from_db(
+        self, page: int, filters: Dict[str, Optional[str]]
+    ) -> List[Dict[str, Any]]:
         if not os.path.exists(self.source):
             raise FileNotFoundError(f"Database file '{self.source}' not found.")
 
@@ -976,7 +1015,9 @@ class LogDashboardViewer:
 
         return result
 
-    def get_logs(self, page: int = 1, filters: Optional[Dict[str, Optional[str]]] = None) -> List[Dict[str, Any]]:
+    def get_logs(
+        self, page: int = 1, filters: Optional[Dict[str, Optional[str]]] = None
+    ) -> List[Dict[str, Any]]:
         if filters is None:
             filters = {}
 
@@ -987,7 +1028,9 @@ class LogDashboardViewer:
         else:
             raise ValueError(f"Unsupported source_type: {self.source_type}")
 
-    def display_cli(self, page: int = 1, filters: Optional[Dict[str, Optional[str]]] = None) -> None:
+    def display_cli(
+        self, page: int = 1, filters: Optional[Dict[str, Optional[str]]] = None
+    ) -> None:
         """
         Display logs in CLI using rich tables.
         """
@@ -1006,7 +1049,7 @@ class LogDashboardViewer:
             table.add_row(*[str(entry.get(k, "")) for k in logs[0].keys()])
 
         console.print(table)
-        
+
     def _parse_filters(self, args: dict) -> Dict[str, Optional[str]]:
         """
         Extract filters from query parameters.
@@ -1027,7 +1070,7 @@ class LogDashboardViewer:
             "organization",
         ]
         return {k: args.get(k) for k in keys if args.get(k)}
-        
+
     def start_html_dashboard(self, port: int = 8080) -> None:
         """
         Launch Flask dashboard for log viewing.
@@ -1043,7 +1086,9 @@ class LogDashboardViewer:
                 filters = self._parse_filters(request.args)
                 page = int(request.args.get("page", 1))
                 logs = self.get_logs(page=page, filters=filters)
-                return render_template_string(self._html_template(), logs=logs, page=page)
+                return render_template_string(
+                    self._html_template(), logs=logs, page=page
+                )
             except Exception as e:
                 return f"Error: {e}", 500
 
@@ -1224,3 +1269,109 @@ class LogDashboardViewer:
         </body>
         </html>
         """
+
+
+class LogCleanupManager:
+    """
+    LogCleanupManager
+
+    Summary:
+    --------
+    A lightweight utility to clean up old SQLite log entries and delete old log files
+    based on a retention period. Designed to be used as a cron job, without any web frameworks.
+
+    Features:
+    ---------
+    - Deletes SQLite logs older than the specified number of days.
+    - Deletes rotated/compressed log files older than the specified number of days.
+    - Safe exception handling and informative output.
+    """
+
+    def __init__(
+        self,
+        db_path: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        file_patterns: Optional[List[str]] = None,
+        retention_days: int = 30,
+    ) -> None:
+        """
+        Initialize the cleanup manager.
+
+        Parameters:
+        -----------
+        db_path : str, optional
+            Path to the SQLite database to clean.
+        log_dir : str, optional
+            Directory containing log files to clean.
+        file_patterns : List[str], optional
+            List of file suffixes/extensions (e.g., ['.log', '.gz']) to delete based on age.
+        retention_days : int
+            Number of days to retain logs (older logs will be deleted).
+        """
+        self.db_path = db_path
+        self.log_dir = log_dir
+        self.file_patterns = file_patterns or [".log"]
+        self.retention_days = retention_days
+
+    def cleanup_sqlite_logs(self) -> None:
+        """
+        Deletes log entries from the SQLite database older than the retention period.
+        """
+        if not self.db_path or not os.path.exists(self.db_path):
+            print(f"[SQLite] Skipped: Database not found at {self.db_path}")
+            return
+
+        try:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(
+                days=self.retention_days
+            )
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM logs WHERE timestamp < ?", (cutoff_date.isoformat(),)
+                )
+                deleted_rows = cursor.rowcount
+                conn.commit()
+                print(
+                    f"[SQLite] Deleted {deleted_rows} log entries older than {cutoff_date}"
+                )
+        except Exception as e:
+            print(f"[SQLite] Cleanup failed: {e}")
+
+    def cleanup_old_log_files(self) -> None:
+        """
+        Deletes log files from the specified log directory older than the retention period.
+        """
+        if not self.log_dir or not os.path.exists(self.log_dir):
+            print(f"[FileSystem] Skipped: Log directory not found at {self.log_dir}")
+            return
+
+        cutoff_time = datetime.now().timestamp() - (self.retention_days * 86400)
+        deleted_files = 0
+
+        try:
+            for filename in os.listdir(self.log_dir):
+                if any(filename.endswith(ext) for ext in self.file_patterns):
+                    file_path = os.path.join(self.log_dir, filename)
+                    if (
+                        os.path.isfile(file_path)
+                        and os.path.getmtime(file_path) < cutoff_time
+                    ):
+                        os.remove(file_path)
+                        deleted_files += 1
+                        print(f"[FileSystem] Deleted: {file_path}")
+        except Exception as e:
+            print(f"[FileSystem] File cleanup failed: {e}")
+        else:
+            print(f"[FileSystem] Total deleted files: {deleted_files}")
+
+    def run(self) -> None:
+        """
+        Runs both SQLite and file cleanup operations.
+        """
+        print(
+            f"[CleanupManager] Starting cleanup. Retention: {self.retention_days} days"
+        )
+        self.cleanup_sqlite_logs()
+        self.cleanup_old_log_files()
+        print("[CleanupManager] Cleanup complete.")

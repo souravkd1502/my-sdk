@@ -17,7 +17,7 @@ Author: Example (2025)
 
 import os
 import time
-from logger import EnhancedLogger, LogExporter, LogDashboardViewer
+from logger import EnhancedLogger, LogExporter, LogDashboardViewer, LogCleanupManager
 
 LOG_FILE = "logs/example_app.log"
 DB_PATH = "logs/example_app.db"
@@ -79,6 +79,14 @@ def main():
     viewer.start_html_dashboard(
         port=5000,
     )
+    
+    cleaner = LogCleanupManager(
+        db_path="logs/example_app.db",
+        log_dir="logs",
+        file_patterns=[".log", ".gz"],
+        retention_days=1
+    )
+    cleaner.run()
 
 if __name__ == "__main__":
     main()
