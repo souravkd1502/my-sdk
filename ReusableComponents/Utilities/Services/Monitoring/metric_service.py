@@ -1,51 +1,56 @@
 """
+metric_service.py
+------------------
+This module provides a MetricsCollector class to collect and store system usage metrics
+for API calls in a Flask application. It supports various storage options including file,
+memory, and database storage.
+
+It also includes a MetricStorage class to handle the storage and retrieval of metrics data.
+The MetricsCollector class collects metrics such as CPU usage, memory usage, execution time,
+and request counts.
+
+It provides methods to initialize the Flask app, collect metrics, reset metrics, save metrics to a file,
+and visualize metrics in a dashboard format. The collected metrics can be viewed through a web interface
+rendered by Flask, which displays performance metrics and error statistics for each API endpoint.
+
+This module is designed to work without OpenTelemetry, making it suitable for both Windows and Linux environments.
+It uses the psutil library to gather system metrics and matplotlib for visualizations.
+
+This module is part of a larger application and is intended to be used as a reusable component for monitoring and 
+performance tracking. It is structured to allow easy integration into existing Flask applications and provides a 
+simple interface for collecting and storing metrics.
+
 Usage:
 ------
+1. Initialize the Flask app and MetricsCollector:
+    app = Flask(__name__)
+    metrics = MetricsCollector()
+    metrics.init_app(app)
+    
+2. Define your API endpoints as usual:
+    @app.route("/data")
+    def data():
+        return jsonify({"message": "Metrics collected!"})
+        
+3. Run the Flask app:
+    if __name__ == "__main__":
+        app.run(debug=True)
+        
+4. Create `/view` endpoint to visualize metrics:
+    @app.route("/view")
+    def view_metrics():
+        return metrics.visualize_metrics()
 
-# Initialize Flask and MetricsCollector
-app = Flask(__name__)
-Metrics = MetricsCollector()
-Metrics.init_app(app)
+5. Access the metrics dashboard at `/view` to see the collected metrics and visualizations.
 
-
-@app.route("/data")
-def data():
-    '''Test API Endpoint'''
-    return jsonify({"message": "Metrics collected!"})
-
-
-@app.route("/metrics")
-def get_metrics():
-    '''Endpoint to view collected metrics'''
-    return jsonify(Metrics.get_metrics(metric_endpoint=["/view", "/metrics"]))
-
-
-@app.route("/reset")
-def reset_metrics():
-    '''Endpoint to reset collected metrics'''
-    Metrics.reset_metrics()
-    return jsonify({"message": "Metrics reset!"})
-
-
-@app.route("/save")
-def save_metrics():
-    '''Endpoint to save collected metrics to a file'''
-    Metrics.save_metrics_to_file()
-    return jsonify({"message": "Metrics saved!"})
-
-
-@app.route("/view")
-def index():
-    '''Renders the dashboard'''
-    return Metrics.visualize_metrics()
-
-
-if __name__ == "__main__":
-    app.run(debug=True, port=8080)
-
+Dependencies:
+-------------
+- Flask: For creating the web application and handling requests.
+- psutil: For collecting system metrics such as CPU and memory usage.
 """
 
 # Adding directories to system path to allow importing custom modules
+import os
 import sys
 
 sys.path.append("./")
@@ -53,22 +58,18 @@ sys.path.append("../")
 
 # Importing necessary libraries and modules
 import io
-import csv
 import time
 import json
 import redis
 import psutil
 import base64
 import logging
-import pymongo
-import psycopg2
 import pandas as pd
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from flask import Flask, render_template_string, request, jsonify
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 import matplotlib
 
@@ -84,6 +85,198 @@ logging.basicConfig(
 
 # Load Environment variables
 load_dotenv(override=True)
+
+
+class MetricStorage:
+    """
+    A class to handle the storage of metrics data.
+
+    This class provides methods to save metrics data to a file and load it from a file.
+    It is used to persist the collected metrics data across application restarts.
+    """
+
+    def __init__(
+        self,
+        storage_type: Literal["file", "memory", "database", "instance"] = "instance",
+    ):
+        """
+        Initialize the MetricStorage class.
+
+        This class initializes an empty dictionary to store metrics data.
+        """
+        self.storage_type = storage_type
+
+        if storage_type == "file":
+            self.storage_path = "metrics_data.json"
+        elif storage_type == "instance":
+            self.metrics_data = {}
+
+    def store_metrics(self, metrics_data: Dict[str, Any]) -> None:
+        """
+        Store the collected metrics data.
+
+        Args:
+        -----
+        metrics_data : dict
+            The metrics data to be stored.
+
+        This method stores the collected metrics data in the specified storage type.
+        If the storage type is 'file', it saves the data to a JSON file.
+        If the storage type is 'memory', it stores the data in memory.
+        If the storage type is 'database', it should implement database storage logic.
+        If the storage type is 'instance', it stores the data in an instance variable.
+        """
+        if self.storage_type == "file":
+            with open(self.storage_path, "w") as f:
+                json.dump(metrics_data, f, indent=4)
+                _logger.info(f"Metrics saved to {self.storage_path}")
+        elif self.storage_type == "memory":
+            self._save_to_redis(metrics_data)
+        elif self.storage_type == "database":
+            self._save_to_database(metrics_data)
+        elif self.storage_type == "instance":
+            self.metrics_data = metrics_data
+        else:
+            raise ValueError(
+                "Invalid storage type. Must be one of: 'file', 'memory', 'database', 'instance'."
+            )
+
+    def get_metrics(self, metric_endpoint: List[str] = None) -> Dict[str, Any]:
+        """
+        Retrieve the collected metrics.
+
+        Args:
+        -----
+        metric_endpoint : List[str], optional
+            The endpoints to exclude from the returned metrics. If not provided, all metrics will be returned.
+
+        Returns
+        -------
+        dict:
+            A dictionary containing the collected metrics.
+        """
+        _logger.info("Retrieving collected metrics.")
+        raw_metrics_data = self._retrieve_metrics_data()
+        metrics_data = {}
+
+        for endpoint, value in raw_metrics_data.items():
+            if metric_endpoint and endpoint in metric_endpoint:
+                continue  # Skip excluded endpoints
+
+            if isinstance(value, (bytes, str)):
+                try:
+                    decoded = value.decode("utf-8") if isinstance(value, bytes) else value
+                    metrics_data[endpoint] = json.loads(decoded)
+                except Exception as e:
+                    _logger.error(f"Failed to decode/parse metrics for {endpoint}: {e}")
+                    metrics_data[endpoint] = {}
+            else:
+                metrics_data[endpoint] = value
+
+        _logger.info(f"Metrics data: {metrics_data}")
+        return metrics_data
+
+    
+    def _retrieve_metrics_data(self) -> Dict[str, Any]:
+        """
+        Retrieve metrics data based on the storage type.
+
+        This method retrieves the metrics data from the specified storage type.
+        If the storage type is 'file', it loads the data from a JSON file.
+        If the storage type is 'memory', it retrieves the data from memory.
+        If the storage type is 'database', it should implement database retrieval logic.
+        If the storage type is 'instance', it returns the instance variable.
+
+        Returns
+        -------
+        dict:
+            The retrieved metrics data.
+        """
+        if self.storage_type == "file":
+            with open(self.storage_path, "r") as f:
+                return json.load(f)
+        elif self.storage_type == "memory":
+            return self._retrieve_from_redis()
+        elif self.storage_type == "database":
+            return self._retrieve_from_database()
+        elif self.storage_type == "instance":
+            return self.metrics_data
+        else:
+            raise ValueError(
+                "Invalid storage type. Must be one of: 'file', 'memory', 'database', 'instance'."
+            )
+
+    def reset_metrics(self) -> None:
+        """
+        Reset the collected metrics.
+
+        This method resets the collected metrics by clearing the metrics_data dictionary.
+        """
+        _logger.info("Resetting collected metrics.")
+        self.metrics_data = {}
+
+    def _save_to_redis(self, metrics_data: Dict[str, Any]) -> None:
+        """
+        Save metrics data to Redis.
+
+        This method is a placeholder for saving metrics data to a Redis database.
+        It should implement the logic to connect to Redis and store the metrics data.
+
+        Args:
+            metrics_data (dict): The metrics data to be saved.
+        """
+        redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            db=0,
+        )
+        for endpoint, data in metrics_data.items():
+            redis_client.set(endpoint, json.dumps(data))
+        _logger.info("Metrics data saved to Redis.")
+
+    def _save_to_database(self, metrics_data: Dict[str, Any]) -> None:
+        """
+        Save metrics data to a database.
+
+        This method is a placeholder for saving metrics data to a database.
+        It should implement the logic to connect to the database and store the metrics data.
+
+        Args:
+            metrics_data (dict): The metrics data to be saved.
+        """
+        pass
+
+    def _retrieve_from_redis(self) -> Dict[str, Any]:
+        """
+        Retrieve metrics data from Redis.
+
+        This method is a placeholder for retrieving metrics data from a Redis database.
+        It should implement the logic to connect to Redis and retrieve the metrics data.
+
+        Returns:
+            dict: The retrieved metrics data.
+        """
+        redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            db=0,
+        )
+        keys = redis_client.keys()
+        metrics_data = {key.decode("utf-8"): redis_client.get(key) for key in keys}
+        _logger.info("Metrics data retrieved from Redis.")
+        return metrics_data
+
+    def _retrieve_from_database(self) -> Dict[str, Any]:
+        """
+        Retrieve metrics data from a database.
+
+        This method is a placeholder for retrieving metrics data from a database.
+        It should implement the logic to connect to the database and retrieve the metrics data.
+
+        Returns:
+            dict: The retrieved metrics data.
+        """
+        return {}
 
 
 class MetricsCollector:
@@ -119,7 +312,10 @@ class MetricsCollector:
             self._metrics_data[endpoint] = {"count": 0, "cpu": [], "memory": [], "time": []}
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        storage_type: Literal["file", "memory", "database", "instance"] = "instance",
+    ):
         """
         Initialize the MetricsCollector.
 
@@ -134,6 +330,7 @@ class MetricsCollector:
         None
         """
         self.metrics_data = {}  # Store metrics for each endpoint
+        self.storage = MetricStorage(storage_type=storage_type)
         self.process = (
             psutil.Process()
         )  # Store the process object to measure CPU and memory usage
@@ -147,9 +344,9 @@ class MetricsCollector:
         """
         _logger.info("MetricsCollector.start_timer called")
         if not hasattr(request, "start_time"):
-            request.start_time = time.time()
+            self.start_time = time.time()
             _logger.info(
-                f"MetricsCollector.start_timer: request.start_time = {request.start_time}"
+                f"MetricsCollector.start_timer: request.start_time = {self.start_time}"
             )
 
     def init_app(self, app: Flask) -> None:
@@ -173,6 +370,45 @@ class MetricsCollector:
         app.before_request(self.start_timer)
         _logger.info("MetricsCollector.init_app: before_request handler set")
         app.after_request(self.collect_metrics)
+
+    def get_metrics(self, metric_endpoint: List[str] = None) -> Dict[str, Any]:
+        """
+        Retrieve the collected metrics.
+
+        Args:
+        -----
+        metric_endpoint : str, optional
+            The endpoint to retrieve metrics for. If not provided, all metrics will be returned.
+
+        Returns
+        -------
+        dict:
+            A dictionary containing the collected metrics.
+        """
+        return self.storage.get_metrics(metric_endpoint)
+
+    def reset_metrics(self) -> None:
+        """
+        Reset the collected metrics.
+
+        This method resets the collected metrics by clearing the metrics_data dictionary.
+        """
+        _logger.info("Resetting collected metrics.")
+        self.metrics_data = {}
+        self.storage.reset_metrics()
+
+    def save_metrics_to_file(self, filename: str = "metrics_data.json") -> None:
+        """
+        Save the collected metrics to a file.
+
+        Args:
+        -----
+        filename : str, optional
+            The filename to save the metrics to. Default is "metrics_data.json".
+        """
+        with open(filename, "w") as f:
+            json.dump(self.metrics_data, f, indent=4)
+        _logger.info(f"Metrics saved to {filename}")
 
     def collect_metrics(self, response):
         """
@@ -213,7 +449,7 @@ class MetricsCollector:
         _logger.info(f"Memory Usage: {memory_usage} MB")
 
         # Measure execution time in milliseconds
-        execution_time = (time.time() - request.start_time) * 1000
+        execution_time = (time.time() - self.start_time) * 1000
         _logger.info(f"Execution Time: {execution_time} ms")
 
         request_size = request.content_length or 0
@@ -289,72 +525,10 @@ class MetricsCollector:
             f"Metrics collected for {method} {endpoint}: {self.metrics_data[endpoint]}"
         )
 
+        # Store metrics in the specified storage type
+        self.storage.store_metrics(self.metrics_data)
+
         return response
-
-    def get_metrics(self, metric_endpoint: List[str] = None) -> Dict[str, Any]:
-        """
-        Retrieve the collected metrics.
-
-        Args:
-        -----
-        metric_endpoint : str, optional
-            The endpoint to retrieve metrics for. If not provided, all metrics will be returned.
-
-        This method returns a dictionary where each key is an endpoint and the value is another dictionary containing the following metrics:
-
-        - count (int): Number of times the endpoint was called.
-        - cpu (list): List of CPU usage percentages for each call.
-        - memory (list): List of memory usage in MB for each call.
-        - time (list): List of execution times for each call.
-        - method (str): HTTP method used for the endpoint.
-        - avg_cpu (float): Average CPU usage.
-        - avg_memory (float): Average memory usage.
-        - avg_time (float): Average execution time.
-        - max_cpu (float): Maximum CPU usage.
-        - max_memory (float): Maximum memory usage.
-        - max_time (float): Maximum execution time.
-        - min_cpu (float): Minimum CPU usage.
-        - min_memory (float): Minimum memory usage.
-        - min_time (float): Minimum execution time.
-        - requested_at (str): Timestamp of the last request in 'YYYY-MM-DD HH:MM:SS' format.
-
-        Returns
-        -------
-        dict:
-            A dictionary containing the collected metrics.
-        """
-        _logger.info("Retrieving collected metrics.")
-        if metric_endpoint:
-            _logger.info("No endpoint provided. Returning all metrics.")
-            for endpoint in metric_endpoint:
-                if endpoint and endpoint in self.metrics_data.keys():
-                    del self.metrics_data[endpoint]
-
-        metrics_data = self.metrics_data
-        _logger.info(f"Metrics data: {metrics_data}")
-        return metrics_data
-
-    def reset_metrics(self) -> None:
-        """
-        Reset the collected metrics.
-
-        This method resets the collected metrics by clearing the metrics_data dictionary.
-        """
-        _logger.info("Resetting collected metrics.")
-        self.metrics_data = {}
-
-    def save_metrics_to_file(self, filename="metrics.json"):
-        """
-        Save the collected metrics to a file.
-
-        This method saves the collected metrics to a file in JSON format.
-
-        Args:
-            filename (str): The name of the file to save the metrics to. Defaults to "metrics.json".
-        """
-        with open(filename, "w") as f:
-            json.dump(self.metrics_data, f, indent=4)
-            _logger.info(f"Metrics saved to {filename}")
 
     def visualize_metrics(self):
         """Renders the dashboard with performance metrics and error statistics."""
@@ -541,7 +715,7 @@ class MetricsCollector:
 
 # Initialize Flask and MetricsCollector
 app = Flask(__name__)
-Metrics = MetricsCollector()
+Metrics = MetricsCollector(storage_type="memory")
 Metrics.init_app(app)
 
 
@@ -587,4 +761,4 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=False, port=8080)
+    app.run(debug=True, port=8080)
