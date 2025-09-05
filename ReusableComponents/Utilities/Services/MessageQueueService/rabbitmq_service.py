@@ -23,8 +23,9 @@ Usage example (see __main__ at bottom):
 
 This file is meant to be copied into your project as-is. No external imports besides `pika`.
 
-Author: SDK Team
-License: MIT
+Author: Sourav Das
+Email: sourav.bt.kt@gmail.com
+Date:05-09-2025
 Version: 1.0.0
 """
 
@@ -202,6 +203,7 @@ class RabbitMQClient:
             handler.setFormatter(logging.Formatter(fmt))
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
+        self.logger.propagate = False
 
         self._connection: Optional[pika.BlockingConnection] = None
         self._pub_channel: Optional[BlockingChannel] = None
@@ -345,7 +347,10 @@ class RabbitMQClient:
         """
         # Store exchange config for re-declaration after reconnect
         self._exchanges[name] = {
-            "type": ex_type, "durable": durable, "auto_delete": auto_delete, "args": kwargs
+            "type": ex_type,
+            "durable": durable,
+            "auto_delete": auto_delete,
+            "args": kwargs,
         }
         self._ensure_connection()
         self._pub_channel.exchange_declare(
@@ -391,7 +396,7 @@ class RabbitMQClient:
             "durable": durable,
             "exclusive": exclusive,
             "auto_delete": auto_delete,
-            "args": kwargs
+            "args": kwargs,
         }
         self._ensure_connection()
         self._pub_channel.queue_declare(
@@ -1018,11 +1023,11 @@ if __name__ == "__main__":
     )
 
     # RPC demo (requires a server listening on queue 'rpc.echo')
-    # try:
-    #     rsp = client.rpc_call("rpc.echo", {"ping": True})
-    #     print("RPC response:", rsp)
-    # except Exception as e:
-    #     print("RPC demo skipped:", e)
+    try:
+        rsp = client.rpc_call("rpc.echo", {"ping": True})
+        print("RPC response:", rsp)
+    except Exception as e:
+        print("RPC demo skipped:", e)
 
     # Consumer demo (Ctrl+C to stop)
     def handle_message(ch, method, props, body: bytes):
