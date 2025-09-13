@@ -5,27 +5,32 @@ File-based data extraction framework for ETL pipelines.
 
 This module provides a unified framework for extracting structured and semi-structured
 data from files. It defines an abstract base class (:class:`FileExtractor`) that
-standardizes file ingestion patterns, and concrete implementations for CSV and JSON
-(including JSON Lines/NDJSON). The design is extensible, allowing additional formats
-such as Excel, Parquet, XML, or DOCX to be integrated seamlessly.
+standardizes file ingestion patterns, and concrete implementations for CSV, JSON
+(including JSON Lines/NDJSON), Excel, and Parquet. The design is extensible, allowing
+additional formats such as XML, DOCX, or Avro to be integrated seamlessly.
 
 The framework is optimized for scalability and production use: it supports
 single files, lists of files, or entire directory trees (with recursive discovery),
 and offers both in-memory and streaming modes for efficient handling of datasets.
 Optional parallelism accelerates ingestion when working with many small/medium files.
-JSON extractors also support nested structure flattening and partition enrichment
+Extractors also support schema validation, column projection, and partition enrichment
 from folder naming schemes (e.g., ``year=2025/month=09``).
 
 Key Features
 ------------
 - **Base class** (`FileExtractor`) defining consistent extraction interfaces.
-- **Implemented formats**: CSV, JSON, and JSON Lines (NDJSON).
-- **Extensible design**: easily extend to Excel, Parquet, XML, DOCX, and more.
+- **Implemented formats**:
+  - **CSVExtractor**: flexible delimiter handling, chunked reading, schema validation.
+  - **JSONExtractor**: standard JSON, JSON Lines (NDJSON), streaming with `ijson`,
+    nested structure flattening, partition enrichment.
+  - **ExcelExtractor**: multi-sheet ingestion, selective sheet extraction, chunking.
+  - **ParquetExtractor**: schema validation across files, row-group streaming,
+    partition-aware ingestion, and parallel reads.
+- **Extensible design**: easily extend to XML, DOCX, Avro, or custom formats.
 - **Input flexibility**: single file, multiple files, or recursive folder discovery.
 - **Streaming and chunked reads** for memory-efficient processing of large files.
 - **Parallel processing** for multi-file ingestion.
-- **Flattening** of nested JSON structures with ``pandas.json_normalize``.
-- **Selective column extraction** for efficiency.
+- **Schema validation** across files with optional strict typing.
 - **Partition key enrichment** from directory naming conventions (``key=value``).
 - **Comprehensive metadata** for tracking extracted datasets.
 
@@ -34,7 +39,7 @@ Exceptions/Errors
 - ``ETLException``: General ETL framework errors (e.g., unsupported file types).
 - ``DataSourceNotFoundError``: Raised when no valid input files are found.
 - ``DataReadError``: Raised when a file cannot be read or parsed.
-- ``DependencyMissingError``: Raised if an optional dependency (e.g., ijson) is missing.
+- ``DependencyMissingError``: Raised if an optional dependency (e.g., ijson, openpyxl) is missing.
 - ``ExtractorError``: Generic catch-all for extraction failures.
 
 Usage Examples
@@ -53,22 +58,32 @@ Streaming large JSONL file:
     >>> for chunk, meta in extractor.stream_extract():
     ...     process_chunk(chunk)
 
-Parallel folder ingestion:
+Excel multi-sheet ingestion:
 
-    >>> extractor = JSONExtractor(
-    ...     input_source="data/logs/",
-    ...     recursive=True,
-    ...     json_lines=True,
-    ...     parallel=True
-    ... )
+    >>> from etl_framework.extractors import ExcelExtractor
+    >>> extractor = ExcelExtractor("workbook.xlsx", sheet_name=None)
     >>> df, meta = extractor.extract()
+
+Partitioned Parquet ingestion:
+
+    >>> from etl_framework.extractors import ParquetExtractor
+    >>> extractor = ParquetExtractor("dataset/", recursive=True, parallel=True, validate_schema=True)
+    >>> df, meta = extractor.extract()
+
+Row-group streaming from Parquet:
+
+    >>> extractor = ParquetExtractor("large.parquet", chunksize=1)
+    >>> for chunk, meta in extractor.extract():
+    ...     process_chunk(chunk)
 
 Dependencies
 ------------
-- ``pandas``: Required for DataFrame operations and chunked CSV/JSONL reading.
+- ``pandas``: Required for DataFrame operations and chunked file reading.
 - ``pathlib``: Cross-platform file path operations.
 - ``concurrent.futures``: Parallel file processing.
 - ``ijson`` (optional): Streaming JSON parser for large JSON arrays.
+- ``openpyxl`` or ``xlrd``: Required for Excel ingestion.
+- ``pyarrow`` or ``fastparquet``: Required for Parquet ingestion.
 - ``typing``: Type hints for better interfaces.
 
 Notes
@@ -76,10 +91,18 @@ Notes
 - Use ``stream_extract()`` for very large files to avoid memory pressure.
 - When ``chunksize`` is specified, extractors yield dataframes in chunks
     instead of loading everything into memory at once.
+- For Parquet, row-group streaming requires ``pyarrow``.
+- For Excel, chunking requires conversion into CSV-like streams.
 - Designed for production ETL: logging, error handling, and extensibility
     are first-class considerations.
 - For massive or distributed workloads, delegate orchestration to Dask, Polars, or Spark.
+
+TODO:
+-------
+1. Properly test Recursive functionality in all file based extractor classes.
+2. Add filtering functionality to all file based extractor classes.
 """
+
 
 import logging
 import pandas as pd
@@ -132,7 +155,7 @@ class FileExtractor(ABC):
     format-specific file reading.
     """
 
-    SUPPORTED_FILE_TYPES = ["csv", "xlsx", "json", "txt", "parquet", "xml", "docx"]
+    SUPPORTED_FILE_TYPES = ["csv", "xlsx", "json", "parquet"]
 
     def __init__(self, filepath: str) -> None:
         """
@@ -192,9 +215,7 @@ class FileExtractor(ABC):
         DataReadError
             If the file cannot be read.
         """
-        raise NotImplementedError(
-            "Subclasses of FileExtractor must implement the extract() method."
-        )
+        pass
 
     def _create_metadata(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
