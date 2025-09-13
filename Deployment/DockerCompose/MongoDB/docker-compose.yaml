@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  mongo:
+    image: 'mongo:7.0.5' # Use a specific MongoDB version
+    ports:
+      - '27017:27017' # Map host port 27017 to container port 27017
+    volumes:
+      - mongo_data:/data/db # Persist data in a named volume
+    environment:
+      # Optional: Set root username and password for MongoDB
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+
+  mongo-express:
+    image: 'mongo-express:1.0.2' # Use a specific Mongo Express version
+    ports:
+      - '8081:8081' # Map host port 8081 to container port 8081 for Mongo Express UI
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo # Connect to the 'mongo' service
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: admin_ui # UI login username
+      ME_CONFIG_BASICAUTH_PASSWORD: password_ui # UI login password
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: 'true' # Enable admin features in Mongo Express
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin # MongoDB root username for UI to connect
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password # MongoDB root password for UI to connect
+    depends_on:
+      - mongo # Ensure MongoDB starts before Mongo Express
+
+volumes:
+  mongo_data: # Define the named volume for MongoDB data persistence

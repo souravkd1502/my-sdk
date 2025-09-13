@@ -100,6 +100,10 @@ class DataReadError(ExtractorError):
 
     pass
 
+class QueryExecutionError(ExtractorError):
+    """Raised when query execution fails to execute."""
+
+    pass
 
 # ─────────────────────────────
 # Transformer Exceptions
