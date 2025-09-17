@@ -200,16 +200,16 @@ logger.setLevel(logging.DEBUG)
 if not logger.handlers:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    
+
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     console_handler.setFormatter(formatter)
-    
+
     # Add handler to logger
     logger.addHandler(console_handler)
-    
+
     # Prevent propagation to root logger to avoid duplicate messages
     logger.propagate = False
 
@@ -238,7 +238,7 @@ class SchemaManager:
     source and target systems.
     """
 
-    def __init__(self, connection: Union[Connection, MongoClient]): # type: ignore
+    def __init__(self, connection: Union[Connection, MongoClient]):  # type: ignore
         """
         Initialize the schema manager.
 
@@ -1251,7 +1251,7 @@ class MongoDBExtractor(DBExtractor):
         self.pipeline = pipeline
         self.projection = projection
         self.batch_size = batch_size or 1000
-        self._client: Optional[MongoClient] = None # type: ignore
+        self._client: Optional[MongoClient] = None  # type: ignore
         self._database = None
         self._collection = None
 
@@ -1302,15 +1302,21 @@ class MongoDBExtractor(DBExtractor):
             )
 
             # Test connection
-            logger.info("MongoDB client created: %s", self._client['db_name'])
+            logger.info("MongoDB client created: %s", self._client["db_name"])
 
             # Get database and collection
             self._database: database = self._client[self.connection_config["database"]]
-            self._collection: collection = self._database[self.connection_config["collection"]]
+            self._collection: collection = self._database[
+                self.connection_config["collection"]
+            ]
 
-            logger.info("Connected to MongoDB database: %s", self.connection_config["database"])
-            logger.info("Using MongoDB collection: %s", self.connection_config["collection"])
-            
+            logger.info(
+                "Connected to MongoDB database: %s", self.connection_config["database"]
+            )
+            logger.info(
+                "Using MongoDB collection: %s", self.connection_config["collection"]
+            )
+
             # Initialize schema manager
             self.schema_manager = SchemaManager(self._client)
 
@@ -1378,9 +1384,11 @@ class MongoDBExtractor(DBExtractor):
 
         query_to_use = query or self.query
         pipeline_to_use = pipeline or self.pipeline
-        
+
         if query_to_use and pipeline_to_use:
-            raise QueryExecutionError("Cannot use both query and pipeline simultaneously.")
+            raise QueryExecutionError(
+                "Cannot use both query and pipeline simultaneously."
+            )
         if not query_to_use and not pipeline_to_use:
             raise QueryExecutionError("Either query or pipeline must be provided.")
 
@@ -1396,7 +1404,7 @@ class MongoDBExtractor(DBExtractor):
                 # Use aggregation pipeline
                 cursor = self._collection.aggregate(pipeline_to_use)
                 documents = list(cursor)
-                operation_type = "aggregation" # NOSONAR
+                operation_type = "aggregation"  # NOSONAR
                 source_info = f"Aggregation on {self.connection_config['collection']}"
             else:
                 # Use find query
@@ -1489,7 +1497,7 @@ class MongoDBExtractor(DBExtractor):
                 cursor = self._collection.aggregate(
                     pipeline_to_use, batchSize=batch_size_to_use
                 )
-                operation_type = "aggregation" # NOSONAR
+                operation_type = "aggregation"  # NOSONAR
                 source_info = f"Aggregation on {self.connection_config['collection']}"
             else:
                 # Use find query with batching

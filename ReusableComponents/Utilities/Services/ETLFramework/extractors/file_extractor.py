@@ -103,7 +103,6 @@ TODO:
 2. Add filtering functionality to all file based extractor classes.
 """
 
-
 import logging
 import pandas as pd
 from pathlib import Path
@@ -2531,7 +2530,7 @@ class ParquetExtractor(FileExtractor):
         columnar reads by only loading required columns into memory.
     filters : Optional[List[Tuple]], default=None
         Row filter predicates for partitioned datasets. Format:
-        [('column', 'operator', value)] where operator can be '=', '!=', '<', 
+        [('column', 'operator', value)] where operator can be '=', '!=', '<',
         '<=', '>', '>=', 'in', 'not in'. E.g., [('year', '=', 2023), ('month', 'in', [1, 2, 3])].
     engine : str, default="pyarrow"
         Parquet parsing engine. Options:
@@ -2790,6 +2789,7 @@ class ParquetExtractor(FileExtractor):
             # Try pyarrow first, then fastparquet
             try:
                 import pyarrow  # noqa: F401
+
                 self.engine = "pyarrow"
                 logger.debug("Auto-selected pyarrow engine")
                 return
@@ -2798,6 +2798,7 @@ class ParquetExtractor(FileExtractor):
 
             try:
                 import fastparquet  # noqa: F401
+
                 self.engine = "fastparquet"
                 logger.debug("Auto-selected fastparquet engine")
                 return
@@ -2811,6 +2812,7 @@ class ParquetExtractor(FileExtractor):
         elif self.engine == "pyarrow":
             try:
                 import pyarrow  # noqa: F401
+
                 logger.debug("Using pyarrow engine")
             except ImportError as exc:
                 raise DependencyMissingError(
@@ -2820,6 +2822,7 @@ class ParquetExtractor(FileExtractor):
         elif self.engine == "fastparquet":
             try:
                 import fastparquet  # noqa: F401
+
                 logger.debug("Using fastparquet engine")
             except ImportError as exc:
                 raise DependencyMissingError(
@@ -2865,35 +2868,40 @@ class ParquetExtractor(FileExtractor):
             }
 
             logger.debug("Extracting schema from Parquet file: %s", filepath)
-            
+
             # For schema extraction, we'll read just the first row group if using pyarrow
             if self.engine == "pyarrow":
                 try:
                     import pyarrow.parquet as pq
-                    
+
                     parquet_file = pq.ParquetFile(filepath)
                     # Read first row group for schema
                     table = parquet_file.read_row_group(0, columns=self.columns)
                     sample_df = table.to_pandas()
-                    
+
                     # Extract additional Parquet metadata
                     try:
                         # Try to get compression info
                         compression = "unknown"
                         if parquet_file.schema_arrow.metadata:
                             metadata_dict = dict(parquet_file.schema_arrow.metadata)
-                            compression = metadata_dict.get(b"COMPRESSION", b"unknown").decode("utf-8")
+                            compression = metadata_dict.get(
+                                b"COMPRESSION", b"unknown"
+                            ).decode("utf-8")
                     except Exception:
                         compression = "unknown"
-                    
+
                     parquet_metadata = {
                         "num_row_groups": parquet_file.num_row_groups,
                         "compression": compression,
                         "file_size_bytes": parquet_file.metadata.serialized_size,
                     }
-                    
+
                 except Exception as pyarrow_exc:
-                    logger.warning("Failed to read with pyarrow, falling back to pandas: %s", pyarrow_exc)
+                    logger.warning(
+                        "Failed to read with pyarrow, falling back to pandas: %s",
+                        pyarrow_exc,
+                    )
                     # Fallback to regular pandas read
                     sample_df = pd.read_parquet(filepath, **read_params)
                     parquet_metadata = {"extraction_method": "pandas_fallback"}
@@ -3102,12 +3110,14 @@ class ParquetExtractor(FileExtractor):
                 **self.read_parquet_kwargs,
             }
 
-            logger.debug("Reading Parquet file: %s with params %s", filepath, read_params)
+            logger.debug(
+                "Reading Parquet file: %s with params %s", filepath, read_params
+            )
             df = pd.read_parquet(filepath, **read_params)
-            
+
             # Enrich with partition columns if configured
             df = self._maybe_enrich_partitions(df, Path(filepath))
-            
+
             return df
 
         except FileNotFoundError as fnf_error:
@@ -3374,12 +3384,8 @@ class ParquetExtractor(FileExtractor):
                     yield df, chunk_metadata
 
             except Exception as e:
-                logger.error(
-                    "Error during streaming extraction from %s: %s", fp, e
-                )
-                raise DataReadError(
-                    f"Failed to stream data from {fp}: {e}"
-                ) from e
+                logger.error("Error during streaming extraction from %s: %s", fp, e)
+                raise DataReadError(f"Failed to stream data from {fp}: {e}") from e
 
     def _apply_filters(self, df: pd.DataFrame, filters: List[Tuple]) -> pd.DataFrame:
         """

@@ -42,12 +42,13 @@ Dependencies
 Notes
 -----
 - All custom extractors **must** inherit from `BaseExtractor` and implement `extract`.
-- Extractors should raise specific exceptions (`DataSourceConnectionError`, `DataReadError`) 
+- Extractors should raise specific exceptions (`DataSourceConnectionError`, `DataReadError`)
     to allow pipelines to differentiate between failure types.
 """
 
 import pandas as pd
 from abc import ABC, abstractmethod
+
 
 class BaseExtractor(ABC):
     """

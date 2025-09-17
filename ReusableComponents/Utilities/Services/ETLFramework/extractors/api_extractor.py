@@ -527,7 +527,7 @@ class BaseAPIExtractor(BaseExtractor, ABC):
                     sum(r["duration_sec"] for r in self._request_log) / total_requests
                 )
                 total_bytes = sum(r["response_size_bytes"] for r in self._request_log)
-                
+
                 # Calculate response code statistics
                 response_codes = {}
                 success_count = 0
@@ -536,8 +536,12 @@ class BaseAPIExtractor(BaseExtractor, ABC):
                     response_codes[status_code] = response_codes.get(status_code, 0) + 1
                     if 200 <= status_code < 300:
                         success_count += 1
-                
-                success_rate = round((success_count / total_requests) * 100, 1) if total_requests > 0 else 0
+
+                success_rate = (
+                    round((success_count / total_requests) * 100, 1)
+                    if total_requests > 0
+                    else 0
+                )
             else:
                 avg_duration = 0
                 total_bytes = 0
@@ -935,5 +939,5 @@ class RESTAPIExtractor(BaseAPIExtractor):
                         process_batch(batch_dict)
         """
         )
-        
+
         print(example)
