@@ -1,0 +1,26 @@
+{
+    "entities": [
+        "PERSON",
+        "EMAIL_ADDRESS",
+        "PHONE_NUMBER",
+        "CREDIT_CARD",
+        "DATE_TIME",
+        "IP_ADDRESS",
+        "US_SSN",
+        "PASSPORT",
+        "USERNAME",
+        "PASSWORD",
+        "IBAN_CODE",
+        "ORGANIZATION",
+        "LOCATION",
+        "VEHICLE_LICENSE",
+        "AGE",
+        "RELIGION",
+        "DRUG",
+        "MEDICAL_CONDITION",
+        "INJURY",
+        "BLOOD_TYPE",
+        "NAME_LETTER",
+        "POSTCODE"
+    ]
+}
