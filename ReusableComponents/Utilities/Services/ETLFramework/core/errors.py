@@ -131,6 +131,9 @@ class DataValidationError(TransformerError):
 
     pass
 
+class CloudExtractorError(Exception):
+    """Base exception for cloud extractor errors."""
+    pass
 
 # ─────────────────────────────
 # Loader Exceptions

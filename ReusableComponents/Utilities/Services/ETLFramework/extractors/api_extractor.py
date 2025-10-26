@@ -1,17 +1,23 @@
 """
 api_extractor.py
 ================
-Optimized API data extraction classes for the ETL framework.
+Optimized API data extraction classes for the ETL framework with checkpoint support.
 
 This module provides robust, memory-efficient extractors for API data sources
 with proper interface compliance, unified request handling, and comprehensive
-error management.
+error management. Additionally, it supports **incremental extraction** using
+checkpoints stored in pluggable backends (File, Redis, SQLite, etc.), allowing
+resumable and reliable ETL operations.
 
 Key Features
 ------------
 - Interface compliant with BaseExtractor (returns Dict from extract())
 - Unified request handling with proper session management
 - Memory-efficient streaming with chunked data creation
+- Incremental extraction support using CheckpointManager
+    - Stores last processed record or timestamp per endpoint
+    - Resumable extraction after failures
+    - Pluggable storage backends: file system, Redis, SQLite, PostgreSQL
 - Comprehensive error handling using ETL framework exceptions
 - Connection pooling and retry mechanisms
 - Proper resource cleanup and context manager support
@@ -20,18 +26,25 @@ Key Features
 Classes
 -------
 - BaseAPIExtractor: Abstract base for all API extractors
-- RESTAPIExtractor: Production-ready REST API extractor with pagination support
+- RESTAPIExtractor: Production-ready REST API extractor with pagination and checkpoint support
 
 Usage Example
 -------------
+>>> from utilities.checkpoint import CheckpointManager, FileCheckpointBackend
+>>> checkpoint_mgr = CheckpointManager(FileCheckpointBackend("checkpoints.json"))
+>>>
 >>> with RESTAPIExtractor(
 ...     base_url="https://api.example.com",
 ...     pagination_type="page",
-...     page_size=100
+...     page_size=100,
+...     checkpoint_manager=checkpoint_mgr,
+...     checkpoint_field="updated_at"
 ... ) as extractor:
-...     result = extractor.extract("/users")
+...     result = extractor.extract_endpoint("/users", incremental_field="updated_at")
 ...     metadata = extractor.get_metadata()
 ...     print(f"Extracted {result.get('count', 0)} records")
+...
+>>> # The last checkpoint is automatically updated after each batch/page.
 """
 
 import time
@@ -53,6 +66,7 @@ try:
         DataReadError,
     )
     from .base import BaseExtractor
+    from ..core.checkpoint import CheckpointManager
 except ImportError:
     # Fallback for standalone usage
     import sys
@@ -68,7 +82,8 @@ except ImportError:
             DataSourceAuthenticationError,
             DataReadError,
         )
-        from extractors.base import BaseExtractor
+        from .base import BaseExtractor
+        from ..core.checkpoint import CheckpointManager
     except ImportError as e:
         raise ImportError(
             f"Could not import ETL framework dependencies: {e}. "
@@ -653,6 +668,9 @@ class RESTAPIExtractor(BaseAPIExtractor):
         pagination_key: str = "page",
         page_size: int = 100,
         max_pages: Optional[int] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
+        checkpoint_key_template: str = "{base_url}:{endpoint}",
+        checkpoint_field: Optional[str] = None,
         **kwargs,
     ) -> None:
         """
@@ -676,6 +694,12 @@ class RESTAPIExtractor(BaseAPIExtractor):
             Number of records per page
         max_pages : int, optional
             Maximum pages to fetch (None for unlimited)
+        checkpoint_manager : CheckpointManager, optional
+            CheckpointManager instance for tracking extraction state
+        checkpoint_key_template : str, default "{base_url}:{endpoint}"
+            Template for generating checkpoint keys. Available variables: base_url, endpoint
+        checkpoint_field : str, optional
+            Field name in the response data to use as checkpoint value (e.g., 'timestamp', 'id')
         **kwargs
             Additional arguments for BaseAPIExtractor
         """
@@ -694,15 +718,158 @@ class RESTAPIExtractor(BaseAPIExtractor):
         self.page_size = page_size
         self.max_pages = max_pages
 
+        # Checkpoint management
+        self.checkpoint_manager = checkpoint_manager
+        self.checkpoint_key_template = checkpoint_key_template
+        self.checkpoint_field = checkpoint_field
+
         # State for pagination
         self._current_page = 1
         self._next_token = None
         self._current_offset = 0
 
+        # Checkpoint state
+        self._current_checkpoint_key = None
+        self._last_checkpoint_value = None
+        self._latest_checkpoint_value = None
+
         logger.debug(
             f"Initialized RESTAPIExtractor with pagination_type={pagination_type}, "
-            f"page_size={page_size}"
+            f"page_size={page_size}, checkpoint_enabled={checkpoint_manager is not None}"
         )
+
+    def _generate_checkpoint_key(self, endpoint: str) -> str:
+        """
+        Generate a checkpoint key for the given endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+
+        Returns
+        -------
+        str
+            Generated checkpoint key
+        """
+        # Clean the base URL and endpoint for key generation
+        clean_base_url = self.base_url.replace("://", "_").replace("/", "_")
+        clean_endpoint = endpoint.replace("/", "_").strip("_")
+
+        # Use the template to generate the key
+        checkpoint_key = self.checkpoint_key_template.format(
+            base_url=clean_base_url, endpoint=clean_endpoint
+        )
+
+        logger.debug(f"Generated checkpoint key: {checkpoint_key}")
+        return checkpoint_key
+
+    def _load_checkpoint(self, endpoint: str) -> Optional[str]:
+        """
+        Load the last checkpoint value for the given endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+
+        Returns
+        -------
+        Optional[str]
+            Last checkpoint value or None if not found
+        """
+        if not self.checkpoint_manager:
+            return None
+
+        checkpoint_key = self._generate_checkpoint_key(endpoint)
+        self._current_checkpoint_key = checkpoint_key
+
+        checkpoint_value = self.checkpoint_manager.get_checkpoint(checkpoint_key)
+        if checkpoint_value:
+            logger.info(f"Loaded checkpoint for {endpoint}: {checkpoint_value}")
+            self._last_checkpoint_value = checkpoint_value
+        else:
+            logger.info(f"No checkpoint found for {endpoint}")
+            self._last_checkpoint_value = None
+
+        return checkpoint_value
+
+    def _save_checkpoint(self, endpoint: str, checkpoint_value: str) -> None:
+        """
+        Save a checkpoint value for the given endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+        checkpoint_value : str
+            Checkpoint value to save
+        """
+        if not self.checkpoint_manager:
+            return
+
+        checkpoint_key = self._generate_checkpoint_key(endpoint)
+        self.checkpoint_manager.set_checkpoint(checkpoint_key, checkpoint_value)
+        self._latest_checkpoint_value = checkpoint_value
+
+        logger.info(f"Saved checkpoint for {endpoint}: {checkpoint_value}")
+
+    def _extract_checkpoint_value(self, records: List[Dict[str, Any]]) -> Optional[str]:
+        """
+        Extract checkpoint value from records based on the configured checkpoint field.
+
+        Parameters
+        ----------
+        records : List[Dict[str, Any]]
+            Records to extract checkpoint value from
+
+        Returns
+        -------
+        Optional[str]
+            Extracted checkpoint value or None
+        """
+        if not self.checkpoint_field or not records:
+            return None
+
+        # Find the latest/highest checkpoint value from all records
+        checkpoint_values = []
+        for record in records:
+            if self.checkpoint_field in record:
+                value = record[self.checkpoint_field]
+                if value is not None:
+                    checkpoint_values.append(str(value))
+
+        if not checkpoint_values:
+            return None
+
+        # For timestamp fields, get the latest one
+        # For ID fields, get the highest one
+        # We'll try to be smart about this by checking if it looks like a timestamp
+        try:
+            # Try to parse as timestamp first
+            import dateutil.parser
+
+            parsed_values = []
+            for val in checkpoint_values:
+                try:
+                    parsed_values.append((dateutil.parser.parse(val), val))
+                except Exception:
+                    # If parsing fails, fall back to string comparison
+                    return max(checkpoint_values)
+
+            # Return the latest timestamp
+            if parsed_values:
+                return max(parsed_values, key=lambda x: x[0])[1]
+        except ImportError:
+            # If dateutil is not available, fall back to string/numeric comparison
+            try:
+                # Try numeric comparison
+                return str(max(float(val) for val in checkpoint_values))
+            except (ValueError, TypeError):
+                # Fall back to string comparison
+                return max(checkpoint_values)
+
+        return None
 
     def _extract_data(self) -> List[Dict[str, Any]]:
         """Extract all data using pagination."""
@@ -718,18 +885,21 @@ class RESTAPIExtractor(BaseAPIExtractor):
         endpoint: str,
         incremental_field: Optional[str] = None,
         last_checkpoint: Optional[str] = None,
+        auto_checkpoint: bool = True,
     ) -> Dict[str, Any]:
         """
-        Extract data from a specific endpoint.
+        Extract data from a specific endpoint with checkpoint support.
 
         Parameters
         ----------
         endpoint : str
             API endpoint to extract from
         incremental_field : str, optional
-            Field for incremental extraction
+            Field for incremental extraction (overrides instance checkpoint_field)
         last_checkpoint : str, optional
-            Last checkpoint value for incremental extraction
+            Last checkpoint value for incremental extraction (overrides stored checkpoint)
+        auto_checkpoint : bool, default True
+            Whether to automatically save checkpoints during extraction
 
         Returns
         -------
@@ -738,10 +908,23 @@ class RESTAPIExtractor(BaseAPIExtractor):
         """
         # Store current endpoint for extraction
         self._current_endpoint = endpoint
-        self._incremental_field = incremental_field
+        self._incremental_field = incremental_field or self.checkpoint_field
+        self._auto_checkpoint = auto_checkpoint
+
+        # Load checkpoint if not explicitly provided and auto_checkpoint is enabled
+        if last_checkpoint is None and auto_checkpoint:
+            last_checkpoint = self._load_checkpoint(endpoint)
+
         self._last_checkpoint = last_checkpoint
 
-        return self.extract()
+        # Extract data
+        result = self.extract()
+
+        # Save final checkpoint if auto_checkpoint is enabled and we have a latest value
+        if auto_checkpoint and self._latest_checkpoint_value:
+            self._save_checkpoint(endpoint, self._latest_checkpoint_value)
+
+        return result
 
     def stream_extract(
         self,
@@ -749,9 +932,11 @@ class RESTAPIExtractor(BaseAPIExtractor):
         batch_size: int = 500,
         incremental_field: Optional[str] = None,
         last_checkpoint: Optional[str] = None,
+        auto_checkpoint: bool = True,
+        checkpoint_frequency: int = 1,
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        Stream data from API in Dictionary batches.
+        Stream data from API in Dictionary batches with checkpoint support.
 
         Parameters
         ----------
@@ -760,9 +945,13 @@ class RESTAPIExtractor(BaseAPIExtractor):
         batch_size : int, default 500
             Records per batch
         incremental_field : str, optional
-            Field for incremental extraction
+            Field for incremental extraction (overrides instance checkpoint_field)
         last_checkpoint : str, optional
-            Last checkpoint value
+            Last checkpoint value (overrides stored checkpoint)
+        auto_checkpoint : bool, default True
+            Whether to automatically save checkpoints during extraction
+        checkpoint_frequency : int, default 1
+            Save checkpoint every N batches (1 = every batch)
 
         Yields
         ------
@@ -770,10 +959,18 @@ class RESTAPIExtractor(BaseAPIExtractor):
             Batches of data as Dictionaries
         """
         self._current_endpoint = endpoint
-        self._incremental_field = incremental_field
+        self._incremental_field = incremental_field or self.checkpoint_field
+        self._auto_checkpoint = auto_checkpoint
+        self._checkpoint_frequency = checkpoint_frequency
+
+        # Load checkpoint if not explicitly provided and auto_checkpoint is enabled
+        if last_checkpoint is None and auto_checkpoint:
+            last_checkpoint = self._load_checkpoint(endpoint)
+
         self._last_checkpoint = last_checkpoint
 
         batch_records = []
+        batch_count = 0
 
         for records in self._stream_extract_internal():
             batch_records.extend(records)
@@ -784,24 +981,51 @@ class RESTAPIExtractor(BaseAPIExtractor):
                 batch_records = batch_records[batch_size:]
 
                 dict_batch = self._convert_to_dict(batch)
+                batch_count += 1
+
+                # Extract and save checkpoint for this batch if enabled
+                if auto_checkpoint and self._incremental_field:
+                    batch_checkpoint = self._extract_checkpoint_value(batch)
+                    if batch_checkpoint:
+                        self._latest_checkpoint_value = batch_checkpoint
+
+                        # Save checkpoint based on frequency
+                        if batch_count % checkpoint_frequency == 0:
+                            self._save_checkpoint(endpoint, batch_checkpoint)
+
                 logger.debug(
-                    f"Yielding batch with {dict_batch.get('count', 0)} records"
+                    f"Yielding batch {batch_count} with {dict_batch.get('count', 0)} records"
                 )
                 yield dict_batch
 
         # Yield remaining records
         if batch_records:
-            dict_batch = self._convert_to_dict(batch_records)
+            batch = batch_records
+            dict_batch = self._convert_to_dict(batch)
+            batch_count += 1
+
+            # Extract and save checkpoint for final batch if enabled
+            if auto_checkpoint and self._incremental_field:
+                batch_checkpoint = self._extract_checkpoint_value(batch)
+                if batch_checkpoint:
+                    self._latest_checkpoint_value = batch_checkpoint
+                    self._save_checkpoint(endpoint, batch_checkpoint)
+
             logger.debug(
-                f"Yielding final batch with {dict_batch.get('count', 0)} records"
+                f"Yielding final batch {batch_count} with {dict_batch.get('count', 0)} records"
             )
             yield dict_batch
 
+        # Save final checkpoint if we have one and auto_checkpoint is enabled
+        if auto_checkpoint and self._latest_checkpoint_value:
+            self._save_checkpoint(endpoint, self._latest_checkpoint_value)
+
     def _stream_extract_internal(self) -> Generator[List[Dict[str, Any]], None, None]:
-        """Internal generator for streaming raw records."""
+        """Internal generator for streaming raw records with checkpoint tracking."""
         endpoint = getattr(self, "_current_endpoint", "/")
         incremental_field = getattr(self, "_incremental_field", None)
         last_checkpoint = getattr(self, "_last_checkpoint", None)
+        auto_checkpoint = getattr(self, "_auto_checkpoint", False)
 
         page_count = 0
 
@@ -837,6 +1061,15 @@ class RESTAPIExtractor(BaseAPIExtractor):
             if not records:
                 logger.info("No more records found, ending extraction")
                 break
+
+            # Extract checkpoint value from records if checkpoint field is configured
+            if auto_checkpoint and incremental_field:
+                page_checkpoint = self._extract_checkpoint_value(records)
+                if page_checkpoint:
+                    self._latest_checkpoint_value = page_checkpoint
+                    logger.debug(
+                        f"Updated checkpoint value from page {page_count + 1}: {page_checkpoint}"
+                    )
 
             logger.info(f"Fetched {len(records)} records (page {page_count + 1})")
             yield records
@@ -918,25 +1151,264 @@ class RESTAPIExtractor(BaseAPIExtractor):
 
         return False  # No pagination
 
+    # ─────────────────────────────
+    # Checkpoint Management Utilities
+    # ─────────────────────────────
+
+    def get_checkpoint_info(self, endpoint: str) -> Dict[str, Any]:
+        """
+        Get checkpoint information for a specific endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+
+        Returns
+        -------
+        Dict[str, Any]
+            Checkpoint information including key, value, and status
+        """
+        if not self.checkpoint_manager:
+            return {
+                "checkpoint_enabled": False,
+                "message": "No checkpoint manager configured",
+            }
+
+        checkpoint_key = self._generate_checkpoint_key(endpoint)
+        checkpoint_value = self.checkpoint_manager.get_checkpoint(checkpoint_key)
+
+        return {
+            "checkpoint_enabled": True,
+            "endpoint": endpoint,
+            "checkpoint_key": checkpoint_key,
+            "checkpoint_value": checkpoint_value,
+            "has_checkpoint": checkpoint_value is not None,
+            "checkpoint_field": self.checkpoint_field,
+            "latest_value": self._latest_checkpoint_value,
+        }
+
+    def delete_checkpoint(self, endpoint: str) -> bool:
+        """
+        Delete the checkpoint for a specific endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+
+        Returns
+        -------
+        bool
+            True if checkpoint was deleted, False if no checkpoint manager or no checkpoint found
+        """
+        if not self.checkpoint_manager:
+            logger.warning("No checkpoint manager configured")
+            return False
+
+        checkpoint_key = self._generate_checkpoint_key(endpoint)
+
+        try:
+            self.checkpoint_manager.delete_checkpoint(checkpoint_key)
+            logger.info(f"Deleted checkpoint for endpoint: {endpoint}")
+
+            # Clear internal state if this was the current checkpoint
+            if self._current_checkpoint_key == checkpoint_key:
+                self._last_checkpoint_value = None
+                self._latest_checkpoint_value = None
+                self._current_checkpoint_key = None
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete checkpoint for {endpoint}: {e}")
+            return False
+
+    def list_checkpoints(self) -> Dict[str, Any]:
+        """
+        List all checkpoints managed by this extractor.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing checkpoint information
+        """
+        if not self.checkpoint_manager:
+            return {
+                "checkpoint_enabled": False,
+                "message": "No checkpoint manager configured",
+                "checkpoints": {},
+            }
+
+        try:
+            all_checkpoints = self.checkpoint_manager.list_checkpoints()
+
+            # Filter checkpoints that belong to this extractor (match base_url pattern)
+            clean_base_url = self.base_url.replace("://", "_").replace("/", "_")
+            extractor_checkpoints = {}
+
+            for key, value in all_checkpoints.items():
+                if key.startswith(clean_base_url):
+                    # Extract endpoint from key
+                    try:
+                        endpoint_part = key.split(":", 1)[1] if ":" in key else key
+                        endpoint = endpoint_part.replace("_", "/")
+                        extractor_checkpoints[endpoint] = {
+                            "checkpoint_key": key,
+                            "checkpoint_value": value,
+                            "endpoint": endpoint,
+                        }
+                    except (IndexError, AttributeError):
+                        # If key format doesn't match expected pattern, include anyway
+                        extractor_checkpoints[key] = {
+                            "checkpoint_key": key,
+                            "checkpoint_value": value,
+                            "endpoint": "unknown",
+                        }
+
+            return {
+                "checkpoint_enabled": True,
+                "base_url": self.base_url,
+                "checkpoint_count": len(extractor_checkpoints),
+                "checkpoints": extractor_checkpoints,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to list checkpoints: {e}")
+            return {"checkpoint_enabled": True, "error": str(e), "checkpoints": {}}
+
+    def reset_checkpoints(
+        self, endpoints: Optional[List[str]] = None
+    ) -> Dict[str, bool]:
+        """
+        Reset (delete) checkpoints for specified endpoints or all endpoints.
+
+        Parameters
+        ----------
+        endpoints : List[str], optional
+            List of endpoints to reset. If None, resets all checkpoints for this extractor.
+
+        Returns
+        -------
+        Dict[str, bool]
+            Dictionary mapping endpoints to success status
+        """
+        if not self.checkpoint_manager:
+            logger.warning("No checkpoint manager configured")
+            return {}
+
+        results = {}
+
+        if endpoints is None:
+            # Get all checkpoints for this extractor
+            checkpoint_info = self.list_checkpoints()
+            if checkpoint_info.get("checkpoint_enabled"):
+                endpoints = list(checkpoint_info["checkpoints"].keys())
+            else:
+                return {}
+
+        for endpoint in endpoints:
+            success = self.delete_checkpoint(endpoint)
+            results[endpoint] = success
+
+        logger.info(f"Reset {sum(results.values())} out of {len(results)} checkpoints")
+        return results
+
+    def get_current_checkpoint_status(self) -> Dict[str, Any]:
+        """
+        Get the current checkpoint status of the extractor.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Current checkpoint status and configuration
+        """
+        return {
+            "checkpoint_manager_configured": self.checkpoint_manager is not None,
+            "checkpoint_field": self.checkpoint_field,
+            "checkpoint_key_template": self.checkpoint_key_template,
+            "current_checkpoint_key": self._current_checkpoint_key,
+            "last_checkpoint_value": self._last_checkpoint_value,
+            "latest_checkpoint_value": self._latest_checkpoint_value,
+            "auto_checkpoint_enabled": getattr(self, "_auto_checkpoint", False),
+        }
+
+    def set_checkpoint_manually(self, endpoint: str, checkpoint_value: str) -> bool:
+        """
+        Manually set a checkpoint value for an endpoint.
+
+        Parameters
+        ----------
+        endpoint : str
+            API endpoint
+        checkpoint_value : str
+            Checkpoint value to set
+
+        Returns
+        -------
+        bool
+            True if checkpoint was set successfully, False otherwise
+        """
+        if not self.checkpoint_manager:
+            logger.warning("No checkpoint manager configured")
+            return False
+
+        try:
+            self._save_checkpoint(endpoint, checkpoint_value)
+            logger.info(f"Manually set checkpoint for {endpoint}: {checkpoint_value}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to manually set checkpoint for {endpoint}: {e}")
+            return False
+
     @staticmethod
     def example_usage():
-        """Demonstrate example usage of RESTAPIExtractor."""
+        """Demonstrate example usage of RESTAPIExtractor with checkpoint functionality."""
 
         example = dedent(
             """
-            from ReusableComponents.Utilities.Services.ETLFramework.extractors.api_extractor import RESTAPIExtractor
+            from ReusableComponents.Utilities.Services.ETLFramework.extractors.api_extractor import (
+                RESTAPIExtractor, CheckpointManager, FileCheckpointBackend
+            )
+            
+            # Basic usage without checkpoints
             with RESTAPIExtractor(
                     base_url="https://api.example.com",
                     pagination_type="page",
                     page_size=100,
                     max_pages=10
                 ) as extractor:
-                    result = extractor.extract("/users")
+                    result = extractor.extract_endpoint("/users")
                     print(f"Extracted {result.get('count', 0)} users")
 
-                    # Stream large datasets
-                    for batch_dict in extractor.stream_extract("/transactions"):
-                        process_batch(batch_dict)
+            # Usage with checkpoint management
+            backend = FileCheckpointBackend("./checkpoints")
+            checkpoint_manager = CheckpointManager(backend)
+            
+            with RESTAPIExtractor(
+                    base_url="https://api.example.com",
+                    pagination_type="page",
+                    page_size=100,
+                    checkpoint_manager=checkpoint_manager,
+                    checkpoint_field="updated_at"  # Field to use for incremental extraction
+                ) as extractor:
+                    # Extract with automatic checkpoint management
+                    result = extractor.extract_endpoint("/users", auto_checkpoint=True)
+                    
+                    # Stream large datasets with checkpoints
+                    for batch in extractor.stream_extract(
+                        "/transactions", 
+                        batch_size=500,
+                        auto_checkpoint=True,
+                        checkpoint_frequency=5  # Save checkpoint every 5 batches
+                    ):
+                        process_batch(batch)
+                    
+                    # Checkpoint management utilities
+                    print("Checkpoint info:", extractor.get_checkpoint_info("/users"))
+                    print("All checkpoints:", extractor.list_checkpoints())
+                    
+                    # Reset specific checkpoints if needed
+                    extractor.reset_checkpoints(["/users"])
         """
         )
 
