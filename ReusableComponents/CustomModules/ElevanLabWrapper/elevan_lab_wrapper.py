@@ -35,12 +35,12 @@ Dependencies:
 
 Example Usage:
     >>> from elevan_lab_wrapper import TextToSpeechClient, TextToDialogueClient
-    >>> 
+    >>>
     >>> # Text-to-Speech
     >>> tts_client = TextToSpeechClient()
     >>> tts_client.speak("Hello, world!")
     >>> file_path = tts_client.to_file("Generate speech and save to file")
-    >>> 
+    >>>
     >>> # Text-to-Dialogue
     >>> dialogue_client = TextToDialogueClient()
     >>> dialogue_inputs = [
@@ -48,12 +48,12 @@ Example Usage:
     ...     {"text": "[calmly] Hi there!", "voice_id": "voice_2"}
     ... ]
     >>> dialogue_client.to_file(dialogue_inputs, "conversation.mp3")
-    >>> 
+    >>>
     >>> # Speech-to-Text
     >>> from elevan_lab_wrapper import SpeechToTextClient
     >>> stt_client = SpeechToTextClient()
     >>> result = stt_client.transcribe("audio.wav", diarize=True)
-    >>> 
+    >>>
     >>> # AI Music Generation
     >>> from elevan_lab_wrapper import MusicClient
     >>> music_client = MusicClient()
@@ -1148,6 +1148,38 @@ class MusicClient:
         play(track_bytes)
         logger.info("Music playback started.")
 
+    def save_music(self, track_bytes: bytes, save_path: str) -> None:
+        """
+        Save generated music audio bytes to a file.
+
+        Args:
+            track_bytes (bytes): Music audio data (can be bytes or generator).
+            save_path (str): Path to save the audio file.
+
+        Raises:
+            ValueError: If track_bytes is empty.
+            RuntimeError: If file writing fails.
+        """
+        if not track_bytes:
+            raise ValueError("No music data to save.")
+
+        try:
+            with open(save_path, "wb") as f:
+                # Handle generator objects (from compose_music)
+                if hasattr(track_bytes, "__iter__") and not isinstance(
+                    track_bytes, (bytes, bytearray)
+                ):
+                    for chunk in track_bytes:
+                        if chunk:
+                            f.write(chunk)
+                else:
+                    # Handle direct bytes
+                    f.write(track_bytes)
+            logger.info(f"Music saved to file: {save_path}")
+        except Exception as e:
+            logger.error(f"Failed to save music to file: {e}")
+            raise RuntimeError(f"Failed to save music to file: {e}") from e
+
     def example_usage(self):
         """Example usage of the MusicClient"""
         print(
@@ -1194,3 +1226,4 @@ class MusicClient:
             print("✅ Detailed music generated and played successfully!")
             """
         )
+        
