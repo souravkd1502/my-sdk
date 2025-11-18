@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Learning Roadmap Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .progress-overview {
+            padding: 30px 40px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .progress-bar-container {
+            background: #e9ecef;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-box .number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-box .label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .week-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .week-btn {
+            padding: 12px 24px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .week-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .week-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .week-content {
+            display: none;
+        }
+
+        .week-content.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .week-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .week-header h2 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .day-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .day-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }
+
+        .day-card.completed {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .day-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .checkbox-container {
+            position: relative;
+        }
+
+        .checkbox {
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .section {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .section h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .section ul {
+            margin-left: 20px;
+        }
+
+        .section li {
+            margin-bottom: 5px;
+            color: #495057;
+        }
+
+        .add-week-btn {
+            display: block;
+            margin: 30px auto;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .add-week-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .day-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Deep Learning Roadmap</h1>
+            <p>Track your journey to mastering Deep Learning</p>
+        </div>
+
+        <div class="progress-overview">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="overallProgress">0%</div>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="number" id="completedDays">0</div>
+                    <div class="label">Days Completed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="totalDays">7</div>
+                    <div class="label">Total Days</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="currentWeek">1</div>
+                    <div class="label">Current Week</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="week-selector" id="weekSelector">
+                <button class="week-btn active" data-week="1">Week 1</button>
+            </div>
+
+            <div id="weekContainer">
+                <!-- Week 1 Content -->
+                <div class="week-content active" data-week="1">
+                    <div class="week-header">
+                        <h2>Week 1 — Deep Learning Foundations</h2>
+                        <p>Internal mechanics of neural networks + coding foundations + implementing NN from scratch</p>
+                    </div>
+
+                    <!-- Day 1 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 1 — Deep Learning Basics & Intuition</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="1">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>What is a neural network?</li>
+                                <li>Components: inputs → weights → bias → activation → output</li>
+                                <li>Forward pass intuition</li>
+                                <li>Loss functions (MSE, cross-entropy)</li>
+                                <li>Training loop overview</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Use NumPy to implement a simple linear regression</li>
+                                <li>Loss calculation (MSE)</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Write notes: forward & loss</li>
+                                <li>Practice computing a few forward passes by hand</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 2 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 2 — Backpropagation (Core of DL)</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="2">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>Chain rule refresher</li>
+                                <li>Derivatives of common activations (sigmoid, tanh, ReLU, GELU)</li>
+                                <li>Backprop in small networks (1-layer, 2-layer)</li>
+                                <li>Gradient descent vs variants</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Manually implement backward pass for a 1-hidden-layer network</li>
+                                <li>Compute gradients for dL/dW, dL/dB, dL/dActivation</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Draw a full gradient flow diagram</li>
+                                <li>Write your own explanation of "how backprop works"</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 3 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 3 — Fully Connected (Dense) Neural Networks</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="3">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>Dense layer: W shape (input_dim, output_dim), B shape (output_dim)</li>
+                                <li>Activation functions: Sigmoid, ReLU, Leaky ReLU, Tanh, GELU</li>
+                                <li>Depth vs width</li>
+                                <li>Parameter count calculations</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Create a DenseLayer class in NumPy with Forward, Backward, Parameter updates</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Practice calculating parameter counts for DNNs</li>
+                                <li>Compare activations visually (optional plot)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 4 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 4 — Basic DL Model Designs</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="4">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>Classic architectures: MLP, Autoencoder, Classifiers</li>
+                                <li>Design principles: Layer sizing, Activation placement</li>
+                                <li>Weight initialization, Learning rate selection</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Pick one: MNIST classifier, Regression model, or Autoencoder</li>
+                                <li>Implement using only NumPy</li>
+                                <li>Multi-layer network, Training loop, Predictions</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Write down training curves (loss vs epoch)</li>
+                                <li>Experiment: increase depth, change activation, change LR</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 5 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 5 — Build Neural Network From Scratch (Part 1)</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="5">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>Architecture: Input → Dense → ReLU → Dense → Softmax</li>
+                                <li>Softmax derivative</li>
+                                <li>Cross-entropy gradient</li>
+                                <li>Mini-batches and training stability</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Start writing the full Neural Network Class</li>
+                                <li>Implement: __init__, forward(), backward(), update_parameters()</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Document architecture</li>
+                                <li>Check correctness of forward pass with small inputs</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 6 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 6 — Train Neural Network From Scratch (Part 2)</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="6">
+                        </div>
+                        <div class="section">
+                            <h4>📚 Theory (1 hr)</h4>
+                            <ul>
+                                <li>Optimization: SGD, Momentum, Adam</li>
+                                <li>Overfitting & underfitting</li>
+                                <li>Train/validation split</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>💻 Practical (1 hr)</h4>
+                            <ul>
+                                <li>Train on: 2D spiral, XOR, or MNIST small batch</li>
+                                <li>Implement: Mini-batching, Loss curve printing, Accuracy calculation</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Consolidation (1 hr)</h4>
+                            <ul>
+                                <li>Save final weights</li>
+                                <li>Plot loss vs epoch (optional)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Day 7 -->
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">Day 7 — Deep Learning Weekly Capstone</div>
+                            <input type="checkbox" class="checkbox" data-week="1" data-day="7">
+                        </div>
+                        <div class="section">
+                            <h4>🎯 Project (1 hr)</h4>
+                            <ul>
+                                <li>Complete: Dense layers, Activations, Loss, Backprop, Training loop</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>🧪 Testing (1 hr)</h4>
+                            <ul>
+                                <li>Test on: XOR, Random classification</li>
+                                <li>Try different network sizes</li>
+                            </ul>
+                        </div>
+                        <div class="section">
+                            <h4>📝 Reflection & Write-Up (1 hr)</h4>
+                            <ul>
+                                <li>Summarize: Backprop, Layer construction, Training loop, Model behavior</li>
+                                <li>Save your custom NN as reusable code</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="add-week-btn" onclick="addNewWeek()">+ Add New Week</button>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        let progress = {};
+        let currentWeekNum = 1;
+        let totalWeeks = 1;
+
+        // Load progress from memory
+        function loadProgress() {
+            const saved = localStorage.getItem('dlRoadmapProgress');
+            if (saved) {
+                progress = JSON.parse(saved);
+            }
+            updateUI();
+        }
+
+        // Save progress to memory
+        function saveProgress() {
+            localStorage.setItem('dlRoadmapProgress', JSON.stringify(progress));
+            updateUI();
+        }
+
+        // Update all UI elements
+        function updateUI() {
+            const allCheckboxes = document.querySelectorAll('.checkbox');
+            let completed = 0;
+            let total = 0;
+
+            allCheckboxes.forEach(checkbox => {
+                const week = checkbox.dataset.week;
+                const day = checkbox.dataset.day;
+                const key = `w${week}d${day}`;
+                
+                total++;
+                if (progress[key]) {
+                    checkbox.checked = true;
+                    checkbox.closest('.day-card').classList.add('completed');
+                    completed++;
+                } else {
+                    checkbox.checked = false;
+                    checkbox.closest('.day-card').classList.remove('completed');
+                }
+            });
+
+            // Update progress bar
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+            document.getElementById('overallProgress').style.width = percentage + '%';
+            document.getElementById('overallProgress').textContent = percentage + '%';
+
+            // Update stats
+            document.getElementById('completedDays').textContent = completed;
+            document.getElementById('totalDays').textContent = total;
+            document.getElementById('currentWeek').textContent = currentWeekNum;
+        }
+
+        // Handle checkbox changes
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('checkbox')) {
+                const week = e.target.dataset.week;
+                const day = e.target.dataset.day;
+                const key = `w${week}d${day}`;
+                
+                if (e.target.checked) {
+                    progress[key] = true;
+                } else {
+                    delete progress[key];
+                }
+                
+                saveProgress();
+            }
+        });
+
+        // Week selector
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('week-btn')) {
+                const weekNum = e.target.dataset.week;
+                
+                // Update buttons
+                document.querySelectorAll('.week-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                e.target.classList.add('active');
+                
+                // Update content
+                document.querySelectorAll('.week-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.querySelector(`.week-content[data-week="${weekNum}"]`).classList.add('active');
+                
+                currentWeekNum = parseInt(weekNum);
+                updateUI();
+            }
+        });
+
+        // Add new week
+        function addNewWeek() {
+            totalWeeks++;
+            const weekNum = totalWeeks;
+            
+            // Add button
+            const weekSelector = document.getElementById('weekSelector');
+            const newBtn = document.createElement('button');
+            newBtn.className = 'week-btn';
+            newBtn.dataset.week = weekNum;
+            newBtn.textContent = `Week ${weekNum}`;
+            weekSelector.appendChild(newBtn);
+            
+            // Add content template
+            const weekContainer = document.getElementById('weekContainer');
+            const newWeek = document.createElement('div');
+            newWeek.className = 'week-content';
+            newWeek.dataset.week = weekNum;
+            newWeek.innerHTML = `
+                <div class="week-header">
+                    <h2>Week ${weekNum} — [Edit Title]</h2>
+                    <p>[Edit Description]</p>
+                </div>
+                <div class="day-card">
+                    <div class="day-header">
+                        <div class="day-title">Day 1 — [Edit Topic]</div>
+                        <input type="checkbox" class="checkbox" data-week="${weekNum}" data-day="1">
+                    </div>
+                    <div class="section">
+                        <h4>📚 Theory (1 hr)</h4>
+                        <ul>
+                            <li>[Add content]</li>
+                        </ul>
+                    </div>
+                    <div class="section">
+                        <h4>💻 Practical (1 hr)</h4>
+                        <ul>
+                            <li>[Add content]</li>
+                        </ul>
+                    </div>
+                    <div class="section">
+                        <h4>📝 Consolidation (1 hr)</h4>
+                        <ul>
+                            <li>[Add content]</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            weekContainer.appendChild(newWeek);
+            
+            updateUI();
+        }
+
+        // Initialize
+        loadProgress();
+    </script>
+</body>
+</html>

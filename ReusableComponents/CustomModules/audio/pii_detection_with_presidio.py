@@ -1,7 +1,7 @@
 """
 Text Anonymization Pipeline using Microsoft Presidio
 
-This module provides a comprehensive, configurable, and scalable solution for anonymizing 
+This module provides a comprehensive, configurable, and scalable solution for anonymizing
 sensitive information (PII, PHI, PCI, etc.) from text transcripts using Microsoft Presidio.
 
 Key Features:
@@ -30,10 +30,10 @@ Architecture:
 Usage Examples:
     Basic usage:
         python pii_detection_with_presidio.py
-    
+
     Programmatic usage:
         from pii_detection_with_presidio import TextAnonymizer, EntityConfig
-        
+
         config = EntityConfig("custom_entities.json")
         anonymizer = TextAnonymizer(config.entities, mask_style="entity")
         result = anonymizer.anonymize_text("Call John Doe at john@email.com")
@@ -112,10 +112,10 @@ class EntityConfig:
     Usage Examples:
         # Use default entities
         config = EntityConfig()
-        
+
         # Load from custom config file
         config = EntityConfig("production_entities.json")
-        
+
         # Access loaded entities
         anonymizer = TextAnonymizer(config.entities)
 
@@ -126,6 +126,33 @@ class EntityConfig:
         FileNotFoundError: If specified config file doesn't exist (falls back to defaults)
         JSONDecodeError: If config file contains invalid JSON (falls back to defaults)
     """
+
+    _ENTITIES = {
+        "entities": [
+            "PERSON",
+            "EMAIL_ADDRESS",
+            "PHONE_NUMBER",
+            "CREDIT_CARD",
+            "DATE_TIME",
+            "IP_ADDRESS",
+            "US_SSN",
+            "PASSPORT",
+            "USERNAME",
+            "PASSWORD",
+            "IBAN_CODE",
+            "ORGANIZATION",
+            "LOCATION",
+            "VEHICLE_LICENSE",
+            "AGE",
+            "RELIGION",
+            "DRUG",
+            "MEDICAL_CONDITION",
+            "INJURY",
+            "BLOOD_TYPE",
+            "NAME_LETTER",
+            "POSTCODE",
+        ]
+    }
 
     def __init__(self, config_file: Optional[str] = None) -> None:
         """
@@ -162,28 +189,38 @@ class EntityConfig:
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
+
                 # Extract entities array from JSON, defaulting to empty list
                 entities = data.get("entities", [])
-                
+
                 # Validate that we have actual entities to work with
                 if not entities:
-                    logging.warning(f"No entities found in {config_file}, using defaults")
+                    logging.warning(
+                        f"No entities found in {config_file}, using defaults"
+                    )
                     return self._get_default_entities()
-                
-                logging.info(f"Loaded {len(entities)} entities from config file: {config_file}")
+
+                logging.info(
+                    f"Loaded {len(entities)} entities from config file: {config_file}"
+                )
                 return entities
-                
+
             except json.JSONDecodeError as e:
-                logging.error(f"Invalid JSON in {config_file}: {e}. Using default entities.")
+                logging.error(
+                    f"Invalid JSON in {config_file}: {e}. Using default entities."
+                )
                 return self._get_default_entities()
             except Exception as e:
-                logging.error(f"Failed to load entities from {config_file}: {e}. Using default entities.")
+                logging.error(
+                    f"Failed to load entities from {config_file}: {e}. Using default entities."
+                )
                 return self._get_default_entities()
         else:
             # Config file not provided or doesn't exist - use defaults
             if config_file:
-                logging.warning(f"Config file {config_file} not found, using default entities")
+                logging.warning(
+                    f"Config file {config_file} not found, using default entities"
+                )
             return self._get_default_entities()
 
     def _get_default_entities(self) -> List[str]:
@@ -200,17 +237,16 @@ class EntityConfig:
         """
         return [
             # Standard Presidio entities for common PII types
-            "PERSON",           # Personal names and identifiers
-            "EMAIL_ADDRESS",    # Email addresses in standard formats
-            "CREDIT_CARD",      # Credit card numbers (supports major issuers)
-            "PHONE_NUMBER",     # Phone numbers in various international formats
-            "DATE_TIME",        # Dates, times, and datetime combinations
-            "IP_ADDRESS",       # IPv4 and IPv6 addresses
-            "US_SSN",          # US Social Security Numbers
-            
+            "PERSON",  # Personal names and identifiers
+            "EMAIL_ADDRESS",  # Email addresses in standard formats
+            "CREDIT_CARD",  # Credit card numbers (supports major issuers)
+            "PHONE_NUMBER",  # Phone numbers in various international formats
+            "DATE_TIME",  # Dates, times, and datetime combinations
+            "IP_ADDRESS",  # IPv4 and IPv6 addresses
+            "US_SSN",  # US Social Security Numbers
             # Custom entities for domain-specific patterns
-            "NAME_LETTER",      # Spell-out names like C-R-I-S or J-O-H-N
-            "POSTCODE",         # Mixed alphanumeric postal/zip codes
+            "NAME_LETTER",  # Spell-out names like C-R-I-S or J-O-H-N
+            "POSTCODE",  # Mixed alphanumeric postal/zip codes
         ]
 
 
@@ -245,11 +281,11 @@ class TextAnonymizer:
         # Basic anonymization with default settings
         anonymizer = TextAnonymizer(["PERSON", "EMAIL_ADDRESS"])
         result = anonymizer.anonymize_text("Contact John Doe at john@email.com")
-        
+
         # Entity-style masking for audit trails
         anonymizer = TextAnonymizer(["PERSON"], mask_style="entity")
         result = anonymizer.anonymize_text("John called")  # → "<PERSON> called"
-        
+
         # Fixed masking for maximum privacy
         anonymizer = TextAnonymizer(["PERSON"], mask_style="fixed")
         result = anonymizer.anonymize_text("John called")  # → "[REDACTED] called"
@@ -285,12 +321,14 @@ class TextAnonymizer:
         """
         self.entities = entities
         self.mask_style = mask_style
-        
+
         # Validate masking style
         valid_styles = {"stars", "entity", "fixed"}
         if mask_style not in valid_styles:
-            raise ValueError(f"Invalid mask_style '{mask_style}'. Must be one of: {valid_styles}")
-        
+            raise ValueError(
+                f"Invalid mask_style '{mask_style}'. Must be one of: {valid_styles}"
+            )
+
         # Initialize the analyzer with custom recognizers
         self.analyzer = self._setup_analyzer()
 
@@ -312,7 +350,7 @@ class TextAnonymizer:
                 - Pattern: Sequences of capital letters separated by hyphens
                 - Examples: "C-R-I-S", "J-O-H-N-S-O-N", "M-A-R-Y"
                 - Confidence: 0.6 (moderate confidence due to potential false positives)
-                
+
             POSTCODE: Matches mixed alphanumeric postal/zip codes
                 - Pattern: Mixed letters, numbers, and optional hyphens
                 - Examples: "C-A-4-9-D-L", "SW1A-1AA", "K1A-0A6"
@@ -331,7 +369,12 @@ class TextAnonymizer:
         name_letter_recognizer = PatternRecognizer(
             supported_entity="NAME_LETTER",
             patterns=[name_letter_pattern],
-            context=["spell", "name", "letter", "spelled"],  # Context keywords for accuracy
+            context=[
+                "spell",
+                "name",
+                "letter",
+                "spelled",
+            ],  # Context keywords for accuracy
         )
 
         # Define custom recognizer for alphanumeric postal codes (POSTCODE)
@@ -344,14 +387,20 @@ class TextAnonymizer:
         postcode_recognizer = PatternRecognizer(
             supported_entity="POSTCODE",
             patterns=[postcode_pattern],
-            context=["postcode", "zip", "address", "postal", "code"],  # Context keywords
+            context=[
+                "postcode",
+                "zip",
+                "address",
+                "postal",
+                "code",
+            ],  # Context keywords
         )
 
         # Register custom recognizers with the analyzer
         # These will be used alongside built-in Presidio recognizers
         analyzer.registry.add_recognizer(name_letter_recognizer)
         analyzer.registry.add_recognizer(postcode_recognizer)
-        
+
         return analyzer
 
     def _mask_entity(self, entity_text: str, entity_type: str) -> str:
@@ -425,37 +474,37 @@ class TextAnonymizer:
             # Use Presidio analyzer to detect entities in the text
             # This leverages both built-in ML models and our custom recognizers
             results = self.analyzer.analyze(
-                text=text, 
+                text=text,
                 entities=self.entities,  # Only detect configured entity types
-                language="en"  # English language processing
+                language="en",  # English language processing
             )
 
             # Start with the original text and apply masking operations
             masked_text = text
-            
+
             # Process results in reverse order to maintain string indices
             # When we replace text, indices of later entities don't change
             for result in sorted(results, key=lambda x: x.start, reverse=True):
                 # Extract the detected entity text from current position
-                entity_text = masked_text[result.start:result.end]
-                
+                entity_text = masked_text[result.start : result.end]
+
                 # Generate appropriate masked replacement
                 masked_value = self._mask_entity(entity_text, result.entity_type)
-                
+
                 # Replace the entity with its masked equivalent
                 # Reconstruct string: prefix + masked_value + suffix
                 masked_text = (
-                    masked_text[:result.start] +  # Text before entity
-                    masked_value +                # Masked replacement
-                    masked_text[result.end:]      # Text after entity
+                    masked_text[: result.start]  # Text before entity
+                    + masked_value  # Masked replacement
+                    + masked_text[result.end :]  # Text after entity
                 )
-            
+
             return masked_text
-            
+
         except Exception as e:
             # Log error with stack trace for debugging, but don't expose sensitive data
             logging.error(f"Error during anonymization: {e}\n{traceback.format_exc()}")
-            
+
             # Return original text as fallback - caller should handle this appropriately
             # In production, you might want to return an error indicator instead
             return text
@@ -493,7 +542,7 @@ class FileProcessor:
         # Basic file processing with default output directory
         processor = FileProcessor(anonymizer)
         result = processor.process_file("/path/to/source.txt")
-        
+
         # Custom output directory for organized results
         processor = FileProcessor(anonymizer, output_dir="secure_anonymized")
         result = processor.process_file("/recordings/client1/2023/01/15/call123.txt")
@@ -511,13 +560,15 @@ class FileProcessor:
         - Comprehensive logging for troubleshooting
     """
 
-    def __init__(self, anonymizer: TextAnonymizer, output_dir: str = "anonymized_text") -> None:
+    def __init__(
+        self, anonymizer: TextAnonymizer, output_dir: str = "anonymized_text"
+    ) -> None:
         """
         Initialize FileProcessor with anonymizer and output configuration.
 
         Args:
             anonymizer (TextAnonymizer): Configured anonymization engine for text processing
-            output_dir (str): Base directory for anonymized output files. Defaults to 
+            output_dir (str): Base directory for anonymized output files. Defaults to
                 "anonymized_text". Will be created if it doesn't exist.
 
         Note:
@@ -540,7 +591,7 @@ class FileProcessor:
 
         Path Components:
             - client: Business client identifier (e.g., "clientA", "healthcare_corp")
-            - provider: Service provider name (e.g., "whisper", "assembly_ai") 
+            - provider: Service provider name (e.g., "whisper", "assembly_ai")
             - yyyy: Four-digit year (e.g., "2023", "2024")
             - mm: Two-digit month (e.g., "01", "12")
             - dd: Two-digit day (e.g., "01", "31")
@@ -550,7 +601,7 @@ class FileProcessor:
             file_path (str): Full path to the input file following expected structure
 
         Returns:
-            Tuple[str, str, str, str, str, str]: Extracted metadata as 
+            Tuple[str, str, str, str, str, str]: Extracted metadata as
                 (client, provider, year, month, day, call_id)
 
         Raises:
@@ -577,12 +628,12 @@ class FileProcessor:
             base_idx = next(
                 i for i, part in enumerate(parts) if "tf-call-recordings-raw" in part
             )
-            
+
             # Extract required path components with validation
             # Ensure we have enough path components after the base marker
             if len(parts) < base_idx + 6:
                 raise IndexError("Insufficient path components after base marker")
-            
+
             client, provider, yyyy, mm, dd = (
                 parts[base_idx + 1],  # Client identifier
                 parts[base_idx + 2],  # Provider name
@@ -590,16 +641,16 @@ class FileProcessor:
                 parts[base_idx + 4],  # Month (mm)
                 parts[base_idx + 5],  # Day (dd)
             )
-            
+
             # Extract call ID from filename (without extension)
             call_id = path.stem
-            
+
             # Basic validation of extracted components
             if not all([client, provider, yyyy, mm, dd, call_id]):
                 raise ValueError("One or more path components are empty")
-            
+
             return client, provider, yyyy, mm, dd, call_id
-            
+
         except (IndexError, StopIteration) as e:
             raise ValueError(
                 f"Invalid file path structure: {file_path}. "
@@ -626,7 +677,7 @@ class FileProcessor:
             client (str): Client identifier for organization
             provider (str): Provider name for service tracking
             yyyy (str): Four-digit year for temporal organization
-            mm (str): Two-digit month for temporal organization  
+            mm (str): Two-digit month for temporal organization
             dd (str): Two-digit day for temporal organization
             call_id (str): Unique call identifier for file naming
 
@@ -650,20 +701,20 @@ class FileProcessor:
         # Construct the full output directory path
         # Mirrors input structure under configured output directory
         output_path = (
-            Path(self.output_dir) /
-            "tf-call-recordings-raw" /
-            client /
-            provider /
-            yyyy /
-            mm /
-            dd
+            Path(self.output_dir)
+            / "tf-call-recordings-raw"
+            / client
+            / provider
+            / yyyy
+            / mm
+            / dd
         )
-        
+
         # Create the complete directory structure if it doesn't exist
         # parents=True: Create intermediate directories as needed
         # exist_ok=True: Don't raise error if directory already exists (thread-safe)
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Return complete file path with .txt extension
         return output_path / f"{call_id}.txt"
 
@@ -733,13 +784,15 @@ class FileProcessor:
             # Step 3: Apply anonymization to the text content
             # This leverages the configured anonymizer with entity detection and masking
             anonymized_text = self.anonymizer.anonymize_text(text)
-            
+
             # Step 4: Extract organizational metadata from file path
             # Parse the structured path to determine output organization
             client, provider, yyyy, mm, dd, call_id = self.parse_file_path(file_path)
-            
+
             # Step 5: Generate structured output path with directory creation
-            output_file = self.create_output_path(client, provider, yyyy, mm, dd, call_id)
+            output_file = self.create_output_path(
+                client, provider, yyyy, mm, dd, call_id
+            )
 
             # Step 6: Write anonymized content to output file
             # Use UTF-8 encoding to maintain character set consistency
@@ -748,24 +801,16 @@ class FileProcessor:
 
             # Step 7: Log successful operation and return success result
             logging.info(f"Successfully processed {file_path} -> {output_file}")
-            
-            return {
-                "status": "success",
-                "input": file_path,
-                "output": str(output_file)
-            }
+
+            return {"status": "success", "input": file_path, "output": str(output_file)}
 
         except Exception as e:
             # Comprehensive error handling with detailed logging
             # Log includes stack trace for debugging but doesn't expose sensitive data
             error_msg = f"Error processing {file_path}: {e}"
             logging.error(f"{error_msg}\n{traceback.format_exc()}")
-            
-            return {
-                "status": "error",
-                "input": file_path,
-                "error": str(e)
-            }
+
+            return {"status": "error", "input": file_path, "error": str(e)}
 
 
 # ------------------------- Batch Processor Class ------------------------- #
@@ -804,11 +849,11 @@ class BatchProcessor:
         # Basic batch processing with default settings
         batch_processor = BatchProcessor(file_processor)
         results = batch_processor.process_files(file_list)
-        
+
         # High-throughput processing with more workers
         batch_processor = BatchProcessor(file_processor, max_workers=8)
         results = batch_processor.process_files(large_file_list)
-        
+
         # Result analysis
         successful = [r for r in results if r['status'] == 'success']
         failed = [r for r in results if r['status'] == 'error']
@@ -894,22 +939,22 @@ class BatchProcessor:
             Valid: 1, Invalid: 2
         """
         valid, invalid = [], []
-        
+
         # Iterate through all provided file paths for validation
         for path in file_paths:
             # Check 1: File existence validation
             if not os.path.exists(path):
                 invalid.append(f"{path} - Not found")
                 continue
-            
+
             # Check 2: File format validation (case-insensitive)
             if not path.lower().endswith(".txt"):
                 invalid.append(f"{path} - Not a .txt file")
                 continue
-            
+
             # File passed all validation checks
             valid.append(path)
-        
+
         return valid, invalid
 
     def process_files(self, file_paths: List[str]) -> List[Dict[str, str]]:
@@ -968,7 +1013,7 @@ class BatchProcessor:
             >>> batch_processor = BatchProcessor(file_processor, max_workers=4)
             >>> file_list = ["/data/call1.txt", "/data/call2.txt", "/data/call3.txt"]
             >>> results = batch_processor.process_files(file_list)
-            >>> 
+            >>>
             >>> # Analyze results
             >>> successful = [r for r in results if r['status'] == 'success']
             >>> failed = [r for r in results if r['status'] == 'error']
@@ -981,7 +1026,7 @@ class BatchProcessor:
         # Step 1: Pre-validate all files to filter valid from invalid
         # This fail-fast approach saves resources by avoiding doomed processing attempts
         valid, invalid = self.validate_files(file_paths)
-        
+
         # Step 2: Early exit if no valid files remain after validation
         if not valid:
             logging.warning("No valid files to process after validation")
@@ -989,30 +1034,32 @@ class BatchProcessor:
 
         # Step 3: Initialize result collection for all processing attempts
         results = []
-        
+
         # Step 4: Execute concurrent processing using ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all valid files for processing and create future-to-file mapping
             # This allows us to track which future corresponds to which file
             futures = {
-                executor.submit(self.processor.process_file, file_path): file_path 
+                executor.submit(self.processor.process_file, file_path): file_path
                 for file_path in valid
             }
-            
+
             # Step 5: Collect results with progress tracking as futures complete
             # as_completed() yields futures in completion order (not submission order)
             # tqdm provides real-time progress bar with ETA and processing speed
-            for future in tqdm(as_completed(futures), total=len(valid), desc="Processing"):
+            for future in tqdm(
+                as_completed(futures), total=len(valid), desc="Processing"
+            ):
                 # Get result from completed future (blocks until future is done)
                 result = future.result()
                 results.append(result)
 
         # Step 6: Generate comprehensive batch processing summary
         # Count successful and failed operations for monitoring and reporting
-        success_count = len([r for r in results if r['status'] == 'success'])
-        error_count = len([r for r in results if r['status'] == 'error'])
+        success_count = len([r for r in results if r["status"] == "success"])
+        error_count = len([r for r in results if r["status"] == "error"])
         invalid_count = len(invalid)
-        
+
         # Log comprehensive batch completion summary for monitoring
         logging.info(
             f"Batch processing completed - "
@@ -1022,7 +1069,7 @@ class BatchProcessor:
             f"Total processed: {len(valid)}, "
             f"Total submitted: {len(file_paths)}"
         )
-        
+
         return results
 
 
@@ -1030,11 +1077,11 @@ class BatchProcessor:
 if __name__ == "__main__":
     """
     Main execution block demonstrating the complete anonymization pipeline.
-    
+
     This section provides a working example of how to use the anonymization system
     in production. It demonstrates the proper initialization sequence, configuration
     loading, and batch processing execution with comprehensive result handling.
-    
+
     The example shows processing of call recording transcripts with the following
     workflow:
     1. Define input file list with standardized path structure
@@ -1042,14 +1089,14 @@ if __name__ == "__main__":
     3. Initialize anonymization pipeline components
     4. Execute concurrent batch processing
     5. Report detailed results with success/failure analysis
-    
+
     This pattern can be adapted for various deployment scenarios including:
     - Scheduled batch processing jobs
     - API endpoint implementations
     - Command-line tools
     - Integration with larger data pipelines
     """
-    
+
     # Step 1: Define input files for processing
     # These paths follow the expected directory structure for call recordings
     # Structure: .../tf-call-recordings-raw/client/provider/yyyy/mm/dd/call_id.txt
@@ -1064,22 +1111,24 @@ if __name__ == "__main__":
     # - Falling back to comprehensive defaults if file is missing/invalid
     # - Logging configuration source and entity count for monitoring
     entity_config = EntityConfig(config_file="entities.json")
-    logging.info(f"Loaded configuration with {len(entity_config.entities)} entity types")
+    logging.info(
+        f"Loaded configuration with {len(entity_config.entities)} entity types"
+    )
 
     # Step 3: Initialize the anonymization pipeline components
     # 3a. Create text anonymizer with entity-style masking for audit trails
     # Entity-style masking replaces detected entities with <ENTITY_TYPE> markers,
     # preserving structure while indicating what was redacted for compliance
     anonymizer = TextAnonymizer(
-        entities=entity_config.entities, 
-        mask_style="entity"  # Options: "stars", "entity", "fixed"
+        entities=entity_config.entities,
+        mask_style="entity",  # Options: "stars", "entity", "fixed"
     )
-    
+
     # 3b. Create file processor with default output directory
     # FileProcessor handles file I/O, path parsing, and directory structure preservation
     # Output will be written to "./anonymized_text/" with mirrored directory structure
     file_processor = FileProcessor(anonymizer)
-    
+
     # 3c. Create batch processor with optimized worker count
     # 4 workers provide good balance between throughput and resource usage
     # for typical I/O-bound file processing workloads
@@ -1098,20 +1147,20 @@ if __name__ == "__main__":
     # Separate successful operations from failures for monitoring and alerting
     successful_results = [r for r in results if r["status"] == "success"]
     failed_results = [r for r in results if r["status"] == "error"]
-    
+
     # Log summary statistics for monitoring dashboards
     logging.info(
         f"Processing completed: {len(successful_results)} successful, "
         f"{len(failed_results)} failed out of {len(file_list)} total files"
     )
-    
+
     # Step 6: Report individual file results with clear visual indicators
     # Success results show input -> output mapping for audit trails
     # Error results show detailed error messages for troubleshooting
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("DETAILED PROCESSING RESULTS")
-    print("="*80)
-    
+    print("=" * 80)
+
     for r in results:
         if r["status"] == "success":
             # Success: Show input/output mapping with checkmark
@@ -1121,15 +1170,15 @@ if __name__ == "__main__":
             # Failure: Show error details with X mark for easy identification
             logging.error(f"✗ FAILED: {r['input']}")
             logging.error(f"    Error: {r['error']}")
-    
-    print("="*80)
-    
+
+    print("=" * 80)
+
     # Step 7: Exit with appropriate status code for automation/scripting
     # Exit code 0 = all files processed successfully
     # Exit code 1 = some files failed processing
     # This enables proper integration with batch processing systems
     if failed_results:
-        logging.warning(f"Some files failed processing. Check logs for details.")
+        logging.warning("Some files failed processing. Check logs for details.")
         exit(1)  # Non-zero exit code indicates partial failure
     else:
         logging.info("All files processed successfully!")
