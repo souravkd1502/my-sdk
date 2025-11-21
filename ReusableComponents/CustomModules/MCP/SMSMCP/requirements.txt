@@ -1,0 +1,6 @@
+flask==3.0.0
+flask-cors==4.0.0
+twilio==8.11.1
+python-dotenv==1.0.0
+mcp==1.1.2
+fastmcp==0.3.1

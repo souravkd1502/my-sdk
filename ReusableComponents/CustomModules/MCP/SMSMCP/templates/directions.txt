@@ -1,0 +1,2 @@
+Hi {{name}}, here are directions to {{store}}:
+{{link}}
