@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Server Info Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .section-icon {
+            font-size: 2em;
+            margin-right: 15px;
+        }
+
+        h2 {
+            color: #333;
+            font-size: 1.8em;
+            font-weight: 600;
+        }
+
+        .count-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-left: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #555;
+        }
+
+        tbody tr {
+            transition: all 0.3s ease;
+        }
+
+        tbody tr:hover {
+            background: #f8f9ff;
+            transform: scale(1.01);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .type-async {
+            background: #4caf50;
+            color: white;
+        }
+
+        .type-sync {
+            background: #2196f3;
+            color: white;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-width: 400px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+
+            .section-header {
+                flex-wrap: wrap;
+            }
+
+            .count-badge {
+                margin-left: auto;
+            }
+        }
+
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 MCP Server Info Dashboard</h1>
+            <div class="subtitle">Model Context Protocol Server Configuration</div>
+        </header>
+
+        <div class="content">
+            <!-- Tools Section -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">🛠️</span>
+                    <h2>Tools</h2>
+                    <span class="count-badge">{{ tools|length }}</span>
+                </div>
+                {% if tools %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th>Parameters</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tool in tools %}
+                        <tr>
+                            <td><strong>{{ tool.name }}</strong></td>
+                            <td>{{ tool.description or 'No description' }}</td>
+                            <td>
+                                <span class="type-badge type-{{ tool.type }}">{{ tool.type }}</span>
+                            </td>
+                            <td><div class="code-block">{{ tool.parameters }}</div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">No tools configured</div>
+                {% endif %}
+            </div>
+
+            <!-- Resources Section -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📦</span>
+                    <h2>Resources</h2>
+                    <span class="count-badge">{{ resources|length }}</span>
+                </div>
+                {% if resources %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>URI</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for res in resources %}
+                        <tr>
+                            <td><strong>{{ res.name }}</strong></td>
+                            <td>{{ res.title or 'N/A' }}</td>
+                            <td>{{ res.description or 'No description' }}</td>
+                            <td><div class="code-block">{{ res.uri }}</div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">No resources configured</div>
+                {% endif %}
+            </div>
+
+            <!-- Resource Templates Section -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📋</span>
+                    <h2>Resource Templates</h2>
+                    <span class="count-badge">{{ resource_templates|length }}</span>
+                </div>
+                {% if resource_templates %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>URI Template</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for template in resource_templates %}
+                        <tr>
+                            <td><strong>{{ template.name }}</strong></td>
+                            <td>{{ template.title or 'N/A' }}</td>
+                            <td>{{ template.description or 'No description' }}</td>
+                            <td><div class="code-block">{{ template.uri }}</div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">No resource templates configured</div>
+                {% endif %}
+            </div>
+
+            <!-- Prompts Section -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">💬</span>
+                    <h2>Prompts</h2>
+                    <span class="count-badge">{{ prompts|length }}</span>
+                </div>
+                {% if prompts %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Arguments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for prompt in prompts %}
+                        <tr>
+                            <td><strong>{{ prompt.name }}</strong></td>
+                            <td>{{ prompt.title or 'N/A' }}</td>
+                            <td>{{ prompt.description or 'No description' }}</td>
+                            <td><div class="code-block">{{ prompt.arguments }}</div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">No prompts configured</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <footer>
+            <p>MCP Server Dashboard | Last Updated: {{ now().strftime('%Y-%m-%d %H:%M:%S') if now is defined else 'N/A' }}</p>
+        </footer>
+    </div>
+</body>
+</html>
