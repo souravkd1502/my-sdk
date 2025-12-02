@@ -118,7 +118,7 @@ Report success/failure to requestor:
 **Keep it concise and clear**:
 - Include relevant details (order #, dates, times)
 - Clear call-to-action or next steps
-- Professional friendly tone
+- Professional, neutral tone
 - Sign as "ZIPS Cleaners"
 
 **Example Messages**:
@@ -151,14 +151,14 @@ When sending franchise information:
 
 **Example**:
 ```
-"Hi [Name]! Excited about your interest in ZIPS franchising!
+"ZIPS Franchise Resources:
 
 📊 Investment Details: [link]
 ✅ Franchise Criteria: [link]
 🎯 Benefits: [link]
 📝 Inquiry Form: [link]
 
-Our team will contact you within 1-2 business days!"
+Our team will contact you within 1-2 business days."
 ```
 
 ## Common Scenarios
