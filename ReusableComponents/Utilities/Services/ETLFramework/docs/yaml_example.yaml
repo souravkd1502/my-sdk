@@ -1,0 +1,98 @@
+# ETL Configuration Example
+# This file demonstrates the complete structure for ETL pipeline configurations
+
+global:
+  timezone: "UTC"
+  log_level: "INFO"
+  default_retries: 3
+  default_retry_delay: 5
+
+# Environment variables available to all pipelines
+env:
+  DATABASE_URL: "postgres://user:pass@localhost:5432/db"
+  API_KEY: "${API_KEY}"          # Supports reading from environment
+  DATA_PATH: "/mnt/data"
+
+pipelines:
+  - name: "daily_user_metrics"
+    description: "Compute daily user metrics for dashboards"
+    version: "1.0.0"
+    timeout_seconds: 3600
+    tags:
+      - analytics
+      - daily
+    schedule:
+      cron: "0 2 * * *"
+      timezone: "UTC"
+      enabled: true
+    checkpointing:
+      enabled: true
+      location: "s3://checkpoints/user_metrics/"
+      strategy: "incremental"   # full | incremental
+    extractor:
+      type: "PostgresExtractor"
+      compute_strategy:
+        mode: "local"            # local | thread | process | ray | dask | remote
+        workers: 1
+      config:
+        query: "SELECT * FROM users WHERE updated_at >= :last_run"
+        connection_id: "postgres_main"
+    transformers:
+      - type: "CleanUserData"
+        compute_strategy:
+          mode: "thread"
+          workers: 4
+        config:
+          remove_duplicates: true
+      - type: "NormalizeFields"
+        compute_strategy:
+          mode: "local"
+          workers: 1
+        config:
+          fields:
+            - name
+            - email
+    loader:
+      type: "S3Loader"
+      compute_strategy:
+        mode: "process"
+        workers: 2
+      config:
+        bucket: "analytics-data"
+        prefix: "users/"
+
+  - name: "weekly_sales_report"
+    description: "Generate weekly region-wise sales summary"
+    version: "1.0.0"
+    timeout_seconds: 7200
+    tags:
+      - reporting
+      - weekly
+    schedule:
+      cron: "0 6 * * 1"
+      timezone: "UTC"
+      enabled: true
+    checkpointing:
+      enabled: false
+    extractor:
+      type: "CSVExtractor"
+      compute_strategy:
+        mode: "local"
+        workers: 1
+      config:
+        path: "/mnt/data/sales/*.csv"
+    transformers:
+      - type: "SalesAggregator"
+        compute_strategy:
+          mode: "local"
+          workers: 1
+        config:
+          group_by: ["region"]
+    loader:
+      type: "DatabaseLoader"
+      compute_strategy:
+        mode: "local"
+        workers: 1
+      config:
+        table: "weekly_sales"
+        connection_id: "postgres_reporting"
