@@ -1,0 +1,165 @@
+{
+  "items": [
+    {
+      "id": "item_c726b2710e78",
+      "type": "agent_handoff",
+      "new_agent_id": "example_agent"
+    },
+    {
+      "id": "item_a6a23421a4e7",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Hello! How can I help you today?"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004221.6406958,
+        "stopped_speaking_at": 1766004223.459894,
+        "llm_node_ttft": 1.4373680999997305,
+        "tts_node_ttfb": 0.35482649999903515
+      }
+    },
+    {
+      "id": "item_ebd47365c06c",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "Hey do you know sonic the hedgehog."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.8634960000000002,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004224.808057,
+        "stopped_speaking_at": 1766004226.405202,
+        "transcription_delay": 1.3652763366699219,
+        "end_of_turn_delay": 1.400334358215332,
+        "on_user_turn_completed_delay": 1.2999953469261527e-06
+      }
+    },
+    {
+      "id": "item_e09a58623326",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Absolutely Sonic the Hedgehog is the speedy blue hero from the video games created by Sega Ready to zoom through loops and collect rings What do you want to know about him"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004229.600048,
+        "stopped_speaking_at": 1766004238.6591349,
+        "llm_node_ttft": 1.1655469999968773,
+        "tts_node_ttfb": 0.6277544999975362,
+        "e2e_latency": 3.1948461532592773
+      }
+    },
+    {
+      "id": "item_4f8123489540",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "What is the last name sega published"
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.8594545714285714,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004240.2022955,
+        "stopped_speaking_at": 1766004242.2003653,
+        "transcription_delay": 0.9776978492736816,
+        "end_of_turn_delay": 1.038811445236206,
+        "on_user_turn_completed_delay": 1.3000026228837669e-06
+      }
+    },
+    {
+      "id": "item_567d6b0e980c",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Sonic the Hedgehog does not have a last name He is just known as Sonic Sega never gave him one It's part of his simple and iconic character design"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004244.9455063,
+        "stopped_speaking_at": 1766004251.8594465,
+        "llm_node_ttft": 0.8013409999985015,
+        "tts_node_ttfb": 0.9037884999997914,
+        "e2e_latency": 2.74514102935791
+      }
+    },
+    {
+      "id": "item_e188eb9dc316",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "What is the last game."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.7841214,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004254.3012033,
+        "stopped_speaking_at": 1766004255.7991438,
+        "transcription_delay": 1.1033143997192383,
+        "end_of_turn_delay": 1.1935029029846191,
+        "on_user_turn_completed_delay": 1.2999953469261527e-06
+      }
+    },
+    {
+      "id": "item_5905fe6e91f0",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "As of June 2024 the latest main Sonic the Hedgehog game published by Sega is Sonic Frontiers released in 2022 It features an open-world style gameplay quite a new direction for Sonic fans"
+      ],
+      "interrupted": true,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004258.6840777,
+        "stopped_speaking_at": 1766004259.2470903,
+        "llm_node_ttft": 0.8183380999980727,
+        "tts_node_ttfb": 0.8731036000026506,
+        "e2e_latency": 2.8849339485168457
+      }
+    },
+    {
+      "id": "item_52c787c16de1",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "Sega published."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.9484859999999999,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004257.307776,
+        "stopped_speaking_at": 1766004257.8990462,
+        "transcription_delay": 1.3480441570281982,
+        "end_of_turn_delay": 1.4270594120025635,
+        "on_user_turn_completed_delay": 7.999988156370819e-07
+      }
+    },
+    {
+      "id": "item_de2a566ad9ad",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Yes Sega published Sonic Frontiers They are the company behind most Sonic games and have been the main publisher for the franchise since it started in 1991"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004261.0346563,
+        "stopped_speaking_at": 1766004268.7585132,
+        "llm_node_ttft": 0.8855154999982915,
+        "tts_node_ttfb": 0.8220499000017298,
+        "e2e_latency": 3.1356101036071777
+      }
+    }
+  ]
+}
