@@ -1,0 +1,130 @@
+{
+  "items": [
+    {
+      "id": "item_7ef2f5ed1ad4",
+      "type": "agent_handoff",
+      "new_agent_id": "example_agent"
+    },
+    {
+      "id": "item_6e8ff26ca753",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Hello! How can I help you today?"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004057.7133567,
+        "stopped_speaking_at": 1766004059.9839685,
+        "llm_node_ttft": 1.8233170000021346,
+        "tts_node_ttfb": 0.480669399999897
+      }
+    },
+    {
+      "id": "item_2869f73886be",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "Hi how are you doing."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.932086,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004061.9348166,
+        "stopped_speaking_at": 1766004063.0298593,
+        "transcription_delay": 0.7093427181243896,
+        "end_of_turn_delay": 0.7606420516967773,
+        "on_user_turn_completed_delay": 1.800006430130452e-06
+      }
+    },
+    {
+      "id": "item_3474ef9f81be",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "I'm doing great thanks for asking How about you What can I do for you today"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004065.6147904,
+        "stopped_speaking_at": 1766004070.2839406,
+        "llm_node_ttft": 1.090978799998993,
+        "tts_node_ttfb": 0.7326950999995461,
+        "e2e_latency": 2.5849311351776123
+      }
+    },
+    {
+      "id": "item_072c5b67345e",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "Can you tell me a bit about subhash chandra bohr."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.8526418,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004073.2342958,
+        "stopped_speaking_at": 1766004077.8297577,
+        "transcription_delay": 1.516178846359253,
+        "end_of_turn_delay": 1.5641651153564453,
+        "on_user_turn_completed_delay": 1.3999961083754897e-06
+      }
+    },
+    {
+      "id": "item_ac9dd5f75d38",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Sure I think you mean Subhash Chandra Bose He was an Indian nationalist leader famous for his role in the Indian independence movement against British rule Bose advocated for complete and immediate independence He was known for his leadership of the Indian National Army and his slogan Give me blood and I will give you freedom He remains a controversial and inspiring figure in Indian history Anything else you want to know about him"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004081.6955037,
+        "stopped_speaking_at": 1766004099.3842719,
+        "llm_node_ttft": 0.9741855999964173,
+        "tts_node_ttfb": 1.3260653000033926,
+        "e2e_latency": 3.865746021270752
+      }
+    },
+    {
+      "id": "item_f6376eda0c0f",
+      "type": "message",
+      "role": "user",
+      "content": [
+        "Nothing that would be all thank you."
+      ],
+      "interrupted": false,
+      "transcript_confidence": 0.9054105714285715,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004100.8342004,
+        "stopped_speaking_at": 1766004102.4340708,
+        "transcription_delay": 0.7653977870941162,
+        "end_of_turn_delay": 0.8633151054382324,
+        "on_user_turn_completed_delay": 8.999995770864189e-07
+      }
+    },
+    {
+      "id": "item_0c507ee6271b",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        "Youre welcome If you ever have more questions just let me know Have a great day"
+      ],
+      "interrupted": false,
+      "extra": {},
+      "metrics": {
+        "started_speaking_at": 1766004104.7939672,
+        "stopped_speaking_at": 1766004108.9843576,
+        "llm_node_ttft": 0.8524059999981546,
+        "tts_node_ttfb": 0.6436000000030617,
+        "e2e_latency": 2.359896421432495
+      }
+    }
+  ]
+}

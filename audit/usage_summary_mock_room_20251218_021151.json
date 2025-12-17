@@ -1,0 +1,37 @@
+{
+  "llm_summary": {
+    "llm_input_tokens": 542,
+    "llm_output_tokens": 118,
+    "llm_completion_tokens": 118,
+    "llm_input_cached_audio_tokens": 0,
+    "llm_input_cached_image_tokens": 0,
+    "llm_input_cached_text_tokens": 0,
+    "llm_input_image_tokens": 0,
+    "llm_input_text_tokens": 0,
+    "llm_prompt_cached_tokens": 0,
+    "llm_prompt_tokens": 542,
+    "llm_cost_usd": 0.000406,
+    "llm_input_cost_usd": 0.000217,
+    "llm_output_cost_usd": 0.000189
+  },
+  "stt_summary": {
+    "stt_audio_duration": 46.85000000000027,
+    "stt_cost_usd": 0.001952
+  },
+  "tts_summary": {
+    "tts_audio_duration": 28.699749999999973,
+    "tts_characters_count": 620,
+    "tts_cost_usd": 0.031
+  },
+  "cost_summary": {
+    "stt_cost_usd": 0.001952,
+    "llm_cost_usd": 0.000406,
+    "tts_cost_usd": 0.031,
+    "total_cost_usd": 0.033358
+  },
+  "models_used": {
+    "stt_model": "assemblyai/universal-streaming:en",
+    "llm_model": "openai/gpt-4.1-mini",
+    "tts_model": "cartesia/sonic-3:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+  }
+}
