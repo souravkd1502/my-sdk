@@ -17,9 +17,9 @@ Requirements:
 
 Description:
 ------------
-This module provides utility methods for handling embeddings tasks using OpenAI API. 
-The OpenAIEmbeddingsHandler class provides methods to get embeddings for text, calculate distances between embeddings, 
-and perform dimensionality reduction using PCA and t-SNE. It also includes methods for plotting precision-recall curves 
+This module provides utility methods for handling embeddings tasks using OpenAI API.
+The OpenAIEmbeddingsHandler class provides methods to get embeddings for text, calculate distances between embeddings,
+and perform dimensionality reduction using PCA and t-SNE. It also includes methods for plotting precision-recall curves
 for multiclass classification tasks.
 
 Functions:
@@ -111,7 +111,7 @@ class EmbeddingHandler:
         -----
         - api_key (str): The API key for OpenAI API.
         - model (str): The model to be used for embeddings tasks.
-        
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
@@ -150,7 +150,7 @@ class EmbeddingHandler:
         - text-embedding-ada-002
             - Most capable 2nd generation embedding model, replacing 16 first generation models
             - Output Dimension: 1,536
-            
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
@@ -182,7 +182,7 @@ class EmbeddingHandler:
 
         Raises:
             ValueError: If the model name is not supported.
-        
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
@@ -217,7 +217,7 @@ class EmbeddingHandler:
 
         Raises:
             ValueError: If the model name is not supported.
-            
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
@@ -252,15 +252,15 @@ class EmbeddingHandler:
 
         Raises:
             ValueError: If the batch size is larger than 2048.
-        
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
         >>> embeddings = handler.get_embeddings(["Hello, world!", "Goodbye, world!"])
         """
-        assert (
-            len(list_of_text) <= 2048
-        ), "The batch size should not be larger than 2048."
+        assert len(list_of_text) <= 2048, (
+            "The batch size should not be larger than 2048."
+        )
 
         _logger.info(f"Length of list_of_text: {len(list_of_text)}")
         _logger.info(f"list_of_text: {list_of_text}")
@@ -296,15 +296,15 @@ class EmbeddingHandler:
 
         Raises:
             ValueError: If the batch size is larger than 2048.
-        
+
         Example:
         --------
         >>> handler = OpenAIEmbeddingsHandler(api_key="your_api_key", model="text-embedding-3-small")
         >>> embeddings = await handler.aget_embeddings(["Hello, world!", "Goodbye, world!"])
         """
-        assert (
-            len(list_of_text) <= 2048
-        ), "The batch size should not be larger than 2048."
+        assert len(list_of_text) <= 2048, (
+            "The batch size should not be larger than 2048."
+        )
 
         _logger.info(f"Length of list_of_text: {len(list_of_text)}")
         _logger.info(f"list_of_text: {list_of_text}")
@@ -344,7 +344,7 @@ class EmbeddingHandler:
 
         Returns:
             float: The cosine similarity between vectors a and b.
-            
+
         Example:
         --------
         >>> a = np.array([1, 2, 3])
@@ -514,7 +514,7 @@ class EmbeddingHandler:
 
             The t-SNE algorithm can be sensitive to the choice of hyperparameters, so it is a good idea to experiment
             with different values for the hyperparameters to find the best results for your specific use case.
-        
+
         Example:
         --------
         >>> embeddings = [[1, 2], [3, 4], [5, 6]]
@@ -562,7 +562,7 @@ class EmbeddingHandler:
             A list of strings representing the names of the classes.
         classifier_name : str
             The name of the classifier being evaluated.
-            
+
         Example:
         --------
         >>> y_score = np.array([[0.1, 0.9], [0.8, 0.2]])
@@ -618,20 +618,20 @@ class EmbeddingHandler:
         for f_score in f_scores:
             x = np.linspace(0.01, 1)
             y = f_score * x / (2 * x - f_score)
-            (l,) = plt.plot(x[y >= 0], y[y >= 0], color="gray", alpha=0.2)
+            (plot,) = plt.plot(x[y >= 0], y[y >= 0], color="gray", alpha=0.2)
             plt.annotate(f"f1={f_score:0.1f}", xy=(0.9, y[45] + 0.02))
 
-        lines.append(l)
+        lines.append(plot)
         labels.append("iso-f1 curves")
-        (l,) = plt.plot(recall_micro, precision_micro, color="gold", lw=2)
-        lines.append(l)
+        (_plot,) = plt.plot(recall_micro, precision_micro, color="gold", lw=2)
+        lines.append(_plot)
         labels.append(
             f"average Precision-recall (auprc = {average_precision_micro:0.2f})"
         )
 
         for i in range(n_classes):
-            (l,) = plt.plot(recall[i], precision[i], lw=2)
-            lines.append(l)
+            (plot,) = plt.plot(recall[i], precision[i], lw=2)
+            lines.append(plot)
             labels.append(
                 f"Precision-recall for class `{class_list[i]}` (auprc = {average_precision[i]:0.2f})"
             )
@@ -672,7 +672,7 @@ class EmbeddingHandler:
 
         Returns:
             plotly.graph_objs._figure.Figure: The interactive 2D chart of embedding components.
-        
+
         Example:
         --------
         >>> components = np.array([[1, 2], [3, 4], [5, 6]])

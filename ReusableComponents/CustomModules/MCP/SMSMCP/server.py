@@ -46,7 +46,6 @@ schema. All responses are deterministic and easy for LLMs to interpret.
 import os
 import logging
 from typing import Dict, Any, Optional
-from dotenv import load_dotenv
 
 from mcp.server.fastmcp import FastMCP
 from utils.template_engine import apply_template
